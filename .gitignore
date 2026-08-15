@@ -1,0 +1,20 @@
+# Local experiments and research data
+experiments/
+
+# Python environment and caches
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Notebook state
+.ipynb_checkpoints/
+
+# Generated media
+midi_output/
+*.mid
+
+# macOS metadata
+.DS_Store
