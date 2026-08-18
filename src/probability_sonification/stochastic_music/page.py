@@ -24,14 +24,28 @@ from probability_sonification.stochastic_music.scipy_backend import (
 )
 
 
-AVAILABLE_INSTRUMENTS = (
-    "Acoustic Grand Piano",
-    "Acoustic Guitar (steel)",
-    "Electric Guitar (clean)",
-    "Violin",
-    "Cello",
-    "Flute",
-    "Synth Drum",
+INSTRUMENT_GROUPS = (
+    ("Piano", ("Acoustic Grand Piano", "Electric Piano 1")),
+    ("Chromatic percussion", ("Xylophone",)),
+    ("Organ", ("Harmonica",)),
+    (
+        "Guitar",
+        (
+            "Acoustic Guitar (steel)",
+            "Electric Guitar (clean)",
+        ),
+    ),
+    ("Bass", ("Electric Bass (pick)",)),
+    ("Solo strings", ("Violin", "Cello")),
+    ("Brass", ("Trumpet", "Trombone", "French Horn")),
+    ("Reed", ("Alto Sax", "Clarinet")),
+    ("Pipe", ("Flute", "Recorder")),
+    ("Percussive", ("Synth Drum",)),
+)
+AVAILABLE_INSTRUMENTS = tuple(
+    instrument
+    for _, instruments in INSTRUMENT_GROUPS
+    for instrument in instruments
 )
 DEFAULT_INSTRUMENTS = {
     "Acoustic Grand Piano",
@@ -65,15 +79,19 @@ def render_stochastic_music_experiment() -> None:
     with st.expander("Instruments", expanded=True):
         st.caption("Select at least one instrument. Their order is preserved in the plots and MIDI tracks.")
         instrument_columns = st.columns(2)
-        selected_instruments = tuple(
-            instrument
-            for index, instrument in enumerate(AVAILABLE_INSTRUMENTS)
-            if instrument_columns[index % 2].checkbox(
-                instrument,
-                value=instrument in DEFAULT_INSTRUMENTS,
-                key=f"stochastic-instrument-{instrument}",
-            )
-        )
+        selected_instruments = []
+        for group_index, (group_name, instruments) in enumerate(INSTRUMENT_GROUPS):
+            # Keep related General MIDI instruments together under a visible heading.
+            with instrument_columns[group_index % 2]:
+                st.markdown(f"**{group_name}**")
+                for instrument in instruments:
+                    if st.checkbox(
+                        instrument,
+                        value=instrument in DEFAULT_INSTRUMENTS,
+                        key=f"stochastic-instrument-{instrument}",
+                    ):
+                        selected_instruments.append(instrument)
+        selected_instruments = tuple(selected_instruments)
 
     with st.expander("Composition", expanded=True):
         composition_columns = st.columns(2)

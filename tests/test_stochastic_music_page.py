@@ -1,7 +1,9 @@
+import pretty_midi
 from streamlit.testing.v1 import AppTest
 
 from probability_sonification.stochastic_music.page import (
     AVAILABLE_INSTRUMENTS,
+    INSTRUMENT_GROUPS,
 )
 
 
@@ -24,6 +26,36 @@ def test_stochastic_music_page_initial_controls():
     assert "Random seed" not in [widget.label for widget in app.number_input]
     assert app.button[0].label == "Generate preview"
 
+    checkbox_labels = [checkbox.label for checkbox in app.checkbox]
+    assert "Alto Sax" in checkbox_labels
+    assert "French Horn" in checkbox_labels
+    assert "Recorder" in checkbox_labels
+    assert "Clarinet" in checkbox_labels
+    assert "Electric Bass (pick)" in checkbox_labels
+    assert "Electric Bass (finger)" not in checkbox_labels
+    assert "Electric Piano 1" in checkbox_labels
+    assert "Xylophone" in checkbox_labels
+    assert "Harmonica" in checkbox_labels
+    assert "Trumpet" in checkbox_labels
+    assert "Trombone" in checkbox_labels
+    assert [group_name for group_name, _ in INSTRUMENT_GROUPS] == [
+        "Piano",
+        "Chromatic percussion",
+        "Organ",
+        "Guitar",
+        "Bass",
+        "Solo strings",
+        "Brass",
+        "Reed",
+        "Pipe",
+        "Percussive",
+    ]
+
     app.toggle[0].set_value(True).run()
 
     assert "Random seed" in [widget.label for widget in app.number_input]
+
+
+def test_all_instrument_options_are_valid_general_midi_names():
+    for instrument in AVAILABLE_INSTRUMENTS:
+        assert isinstance(pretty_midi.instrument_name_to_program(instrument), int)
