@@ -10,6 +10,8 @@ from probability_sonification.stochastic_music import (
     EventPitchSamplingConfig,
     EventTimeSamplingConfig,
     InstrumentDefinition,
+    InstrumentSamplingOverride,
+    SamplingProfile,
     SamplingBackend,
     StochasticMusicConfig,
     assign_event_notes,
@@ -96,6 +98,37 @@ def test_populate_and_expand_event_matrix():
     ]
     assert [slot.event_index_within_block for slot in slots[:2]] == [0, 1]
     assert sampler.seed is not None
+
+
+def test_populate_event_matrix_resolves_per_instrument_profiles():
+    shared = make_config()
+    violin_profile = SamplingProfile(
+        event_count=EventCountSamplingConfig(rate=7.0),
+        event_time=shared.event_time_sampling,
+        event_pitch=shared.event_pitch_sampling,
+    )
+    config = replace(
+        shared,
+        instrument_sampling_overrides=(
+            InstrumentSamplingOverride("Violin", violin_profile),
+        ),
+    )
+
+    class RateRecordingSampler:
+        def __init__(self):
+            self.rates = []
+
+        def sample_event_counts(
+            self, n_instruments, n_time_blocks, config, random_seed
+        ):
+            self.rates.append(config.rate)
+            return np.full((n_instruments, n_time_blocks), int(config.rate))
+
+    sampler = RateRecordingSampler()
+    matrix = populate_event_matrix(config, sampler)
+
+    assert sampler.rates == [2.5, 7.0]
+    assert matrix.counts.tolist() == [[2, 2], [7, 7]]
 
 
 def test_assign_event_times_sorts_each_instrument_and_block_group():

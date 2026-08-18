@@ -14,6 +14,24 @@ class SamplingBackend(str, Enum):
     SCIPY = "scipy"
 
 
+class EventCountDistribution(str, Enum):
+    POISSON = "poisson"
+    NEGATIVE_BINOMIAL = "negative_binomial"
+    BINOMIAL = "binomial"
+
+
+class EventTimeDistribution(str, Enum):
+    UNIFORM = "uniform"
+    BETA = "beta"
+    EXPONENTIAL = "exponential"
+
+
+class EventPitchDistribution(str, Enum):
+    NORMAL = "normal"
+    UNIFORM = "uniform"
+    TRIANGULAR = "triangular"
+
+
 @dataclass(frozen=True)
 class InstrumentDefinition:
     """General MIDI information needed to create an instrument track."""
@@ -34,6 +52,7 @@ class InstrumentDefinition:
 class EventCountSamplingConfig:
     # Expected musical events per instrument in each time block.
     rate: float
+    distribution: EventCountDistribution = EventCountDistribution.POISSON
 
     def __post_init__(self) -> None:
         if not np.isfinite(self.rate) or self.rate < 0:
@@ -44,6 +63,8 @@ class EventCountSamplingConfig:
 class EventTimeSamplingConfig:
     """Reserved for future event-time model parameters."""
 
+    distribution: EventTimeDistribution = EventTimeDistribution.UNIFORM
+
 
 @dataclass(frozen=True)
 class EventPitchSamplingConfig:
@@ -53,6 +74,7 @@ class EventPitchSamplingConfig:
     standard_deviation: float
     minimum_pitch: int
     maximum_pitch: int
+    distribution: EventPitchDistribution = EventPitchDistribution.NORMAL
 
     def __post_init__(self) -> None:
         if not np.isfinite(self.mean):
@@ -86,6 +108,27 @@ class DrumSoundSamplingConfig:
 
 
 @dataclass(frozen=True)
+class SamplingProfile:
+    """Distribution assignments and parameters for the three sampling stages."""
+
+    event_count: EventCountSamplingConfig
+    event_time: EventTimeSamplingConfig
+    event_pitch: EventPitchSamplingConfig
+
+
+@dataclass(frozen=True)
+class InstrumentSamplingOverride:
+    """An instrument-specific replacement for the shared sampling profile."""
+
+    instrument_name: str
+    profile: SamplingProfile
+
+    def __post_init__(self) -> None:
+        if not self.instrument_name.strip():
+            raise ValueError("Instrument override name must not be empty.")
+
+
+@dataclass(frozen=True)
 class StochasticMusicConfig:
     """Musical structure and sampling choices for one generation run."""
 
@@ -100,6 +143,7 @@ class StochasticMusicConfig:
     event_time_sampling: EventTimeSamplingConfig
     event_pitch_sampling: EventPitchSamplingConfig
     drum_sound_sampling: DrumSoundSamplingConfig
+    instrument_sampling_overrides: tuple[InstrumentSamplingOverride, ...] = ()
 
     def __post_init__(self) -> None:
         if not self.selected_instruments:
@@ -117,6 +161,32 @@ class StochasticMusicConfig:
             raise ValueError("Note velocity must be between 1 and 127.")
         if self.random_seed is not None and self.random_seed < 0:
             raise ValueError("Random seed must be non-negative when provided.")
+        selected_names = set(instrument_names)
+        override_names = [
+            override.instrument_name for override in self.instrument_sampling_overrides
+        ]
+        if len(set(override_names)) != len(override_names):
+            raise ValueError("Instrument sampling overrides must be unique.")
+        if not set(override_names).issubset(selected_names):
+            raise ValueError(
+                "Instrument sampling overrides must reference selected instruments."
+            )
+
+    @property
+    def shared_sampling_profile(self) -> SamplingProfile:
+        return SamplingProfile(
+            event_count=self.event_count_sampling,
+            event_time=self.event_time_sampling,
+            event_pitch=self.event_pitch_sampling,
+        )
+
+    def sampling_profile_for(self, instrument_name: str) -> SamplingProfile:
+        """Resolve an instrument override, falling back to the shared profile."""
+
+        for override in self.instrument_sampling_overrides:
+            if override.instrument_name == instrument_name:
+                return override.profile
+        return self.shared_sampling_profile
 
 
 @dataclass(frozen=True)

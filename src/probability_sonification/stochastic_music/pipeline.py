@@ -51,12 +51,33 @@ def populate_event_matrix(
 ) -> EventMatrix:
     """Populate event counts for every selected instrument and time block."""
 
-    counts = sampler.sample_event_counts(
-        n_instruments=len(config.selected_instruments),
-        n_time_blocks=config.n_time_blocks,
-        config=config.event_count_sampling,
-        random_seed=_derive_seed(config.random_seed, _EVENT_COUNT_TASK),
-    )
+    # Preserve the original bulk draw when every instrument shares one profile.
+    # Overrides require separate rows so each sampler receives its effective config.
+    if not config.instrument_sampling_overrides:
+        counts = sampler.sample_event_counts(
+            n_instruments=len(config.selected_instruments),
+            n_time_blocks=config.n_time_blocks,
+            config=config.event_count_sampling,
+            random_seed=_derive_seed(config.random_seed, _EVENT_COUNT_TASK),
+        )
+    else:
+        rows = []
+        for instrument_index, instrument in enumerate(config.selected_instruments):
+            profile = config.sampling_profile_for(instrument.name)
+            row = np.asarray(
+                sampler.sample_event_counts(
+                    n_instruments=1,
+                    n_time_blocks=config.n_time_blocks,
+                    config=profile.event_count,
+                    random_seed=_derive_seed(
+                        config.random_seed, _EVENT_COUNT_TASK, instrument_index
+                    ),
+                )
+            )
+            if row.shape != (1, config.n_time_blocks):
+                raise ValueError("Event count sampler returned an unexpected shape.")
+            rows.append(row[0])
+        counts = np.stack(rows)
 
     # EventMatrix provides the common validation boundary for every backend.
     return EventMatrix(
@@ -100,6 +121,8 @@ def assign_event_times(
     timed_events = []
 
     for (instrument_index, time_block_index), group in grouped_slots.items():
+        instrument = config.selected_instruments[instrument_index]
+        profile = config.sampling_profile_for(instrument.name)
         block_start = time_block_index * time_block_duration
         block_end = block_start + time_block_duration
         sampled_times = np.asarray(
@@ -107,7 +130,7 @@ def assign_event_times(
                 n_events=len(group),
                 block_start=block_start,
                 block_end=block_end,
-                config=config.event_time_sampling,
+                config=profile.event_time,
                 random_seed=_derive_seed(
                     config.random_seed,
                     _EVENT_TIME_TASK,
@@ -140,29 +163,38 @@ def assign_event_notes(
 ) -> tuple[MusicalEvent, ...]:
     """Assign Normal pitches or categorical drum sounds to musical events."""
 
-    pitched_indexes = []
+    pitched_indexes_by_instrument: dict[int, list[int]] = defaultdict(list)
     drum_indexes = []
     for index, timed_event in enumerate(timed_events):
         instrument = config.selected_instruments[timed_event.slot.instrument_index]
-        (drum_indexes if instrument.is_drum else pitched_indexes).append(index)
+        if instrument.is_drum:
+            drum_indexes.append(index)
+        else:
+            pitched_indexes_by_instrument[timed_event.slot.instrument_index].append(index)
 
     note_numbers = np.empty(len(timed_events), dtype=int)
-    sampled_pitches = np.asarray(
-        pitch_sampler.sample_event_pitches(
-            n_events=len(pitched_indexes),
-            config=config.event_pitch_sampling,
-            random_seed=_derive_seed(config.random_seed, _EVENT_PITCH_TASK),
+    # Pitch groups must be sampled separately because their limits and models may differ.
+    for instrument_index, pitched_indexes in pitched_indexes_by_instrument.items():
+        instrument = config.selected_instruments[instrument_index]
+        pitch_config = config.sampling_profile_for(instrument.name).event_pitch
+        sampled_pitches = np.asarray(
+            pitch_sampler.sample_event_pitches(
+                n_events=len(pitched_indexes),
+                config=pitch_config,
+                random_seed=_derive_seed(
+                    config.random_seed, _EVENT_PITCH_TASK, instrument_index
+                ),
+            )
         )
-    )
-    if sampled_pitches.shape != (len(pitched_indexes),):
-        raise ValueError("Event pitch sampler returned an unexpected shape.")
-    if not np.issubdtype(sampled_pitches.dtype, np.integer):
-        raise ValueError("Event pitch sampler must return integer MIDI pitches.")
-    if np.any(sampled_pitches < config.event_pitch_sampling.minimum_pitch) or np.any(
-        sampled_pitches > config.event_pitch_sampling.maximum_pitch
-    ):
-        raise ValueError("Event pitch sampler returned values outside the pitch limits.")
-    note_numbers[pitched_indexes] = sampled_pitches
+        if sampled_pitches.shape != (len(pitched_indexes),):
+            raise ValueError("Event pitch sampler returned an unexpected shape.")
+        if not np.issubdtype(sampled_pitches.dtype, np.integer):
+            raise ValueError("Event pitch sampler must return integer MIDI pitches.")
+        if np.any(sampled_pitches < pitch_config.minimum_pitch) or np.any(
+            sampled_pitches > pitch_config.maximum_pitch
+        ):
+            raise ValueError("Event pitch sampler returned values outside the pitch limits.")
+        note_numbers[pitched_indexes] = sampled_pitches
 
     sampled_drum_sounds = np.asarray(
         drum_sound_sampler.sample_drum_sounds(

@@ -70,4 +70,4 @@ def test_stochastic_music_generator_destination():
     assert not app.exception
     assert app.title[0].value == "Stochastic Music Generator"
     assert app.caption[0].value == "Experiment 2"
-    assert app.button[0].label == "Generate preview"
+    assert "Generate preview" in [button.label for button in app.button]

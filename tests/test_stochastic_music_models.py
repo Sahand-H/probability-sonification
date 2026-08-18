@@ -4,11 +4,16 @@ import pytest
 from probability_sonification.stochastic_music import (
     DrumSoundSamplingConfig,
     EventCountSamplingConfig,
+    EventCountDistribution,
     EventMatrix,
     EventPitchSamplingConfig,
+    EventPitchDistribution,
     EventTimeSamplingConfig,
+    EventTimeDistribution,
+    InstrumentSamplingOverride,
     InstrumentDefinition,
     SamplingBackend,
+    SamplingProfile,
     StochasticMusicConfig,
 )
 
@@ -95,3 +100,36 @@ def test_sampling_configs_validate_distribution_parameters():
         EventPitchSamplingConfig(60, 10, -1, 127)
     with pytest.raises(ValueError, match="sum to one"):
         DrumSoundSamplingConfig((36, 38), (0.2, 0.2))
+
+
+def test_sampling_profiles_support_placeholder_distribution_assignments():
+    profile = SamplingProfile(
+        event_count=EventCountSamplingConfig(
+            2.5, EventCountDistribution.NEGATIVE_BINOMIAL
+        ),
+        event_time=EventTimeSamplingConfig(EventTimeDistribution.BETA),
+        event_pitch=EventPitchSamplingConfig(
+            60, 10, 48, 72, EventPitchDistribution.TRIANGULAR
+        ),
+    )
+    config = make_config(
+        instrument_sampling_overrides=(
+            InstrumentSamplingOverride("Violin", profile),
+        )
+    )
+
+    assert config.sampling_profile_for("Violin") is profile
+    assert config.sampling_profile_for("Acoustic Grand Piano") == (
+        config.shared_sampling_profile
+    )
+
+
+def test_sampling_overrides_must_reference_selected_instruments():
+    profile = make_config().shared_sampling_profile
+
+    with pytest.raises(ValueError, match="selected instruments"):
+        make_config(
+            instrument_sampling_overrides=(
+                InstrumentSamplingOverride("Flute", profile),
+            )
+        )

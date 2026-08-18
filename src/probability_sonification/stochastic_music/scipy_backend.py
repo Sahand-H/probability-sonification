@@ -5,8 +5,11 @@ from scipy import stats
 
 from probability_sonification.stochastic_music.models import (
     DrumSoundSamplingConfig,
+    EventCountDistribution,
     EventCountSamplingConfig,
+    EventPitchDistribution,
     EventPitchSamplingConfig,
+    EventTimeDistribution,
     EventTimeSamplingConfig,
     SamplerMetadata,
     SamplingBackend,
@@ -31,6 +34,10 @@ class ScipyEventCountSampler:
     ) -> np.ndarray:
         _validate_sample_count(n_instruments, "Number of instruments")
         _validate_sample_count(n_time_blocks, "Number of time blocks")
+        if config.distribution is not EventCountDistribution.POISSON:
+            raise NotImplementedError(
+                f"{config.distribution.value} event-count sampling is not implemented yet."
+            )
 
         # Rows represent instruments and columns represent time blocks.
         return stats.poisson.rvs(
@@ -52,6 +59,10 @@ class ScipyEventTimeSampler:
         random_seed: int | None,
     ) -> np.ndarray:
         _validate_sample_count(n_events, "Number of events")
+        if config.distribution is not EventTimeDistribution.UNIFORM:
+            raise NotImplementedError(
+                f"{config.distribution.value} event-time sampling is not implemented yet."
+            )
         if not np.isfinite(block_start) or not np.isfinite(block_end):
             raise ValueError("Time block bounds must be finite.")
         if block_end <= block_start:
@@ -80,6 +91,10 @@ class ScipyEventPitchSampler:
         random_seed: int | None,
     ) -> np.ndarray:
         _validate_sample_count(n_events, "Number of events")
+        if config.distribution is not EventPitchDistribution.NORMAL:
+            raise NotImplementedError(
+                f"{config.distribution.value} event-pitch sampling is not implemented yet."
+            )
         sampled_pitches = stats.norm.rvs(
             loc=config.mean,
             scale=config.standard_deviation,
@@ -138,3 +153,5 @@ def create_scipy_sampler_suite() -> SamplerSuite:
             drum_sound={"distribution": "categorical"},
         ),
     )
+    EventPitchDistribution,
+    EventTimeDistribution,

@@ -4,7 +4,9 @@ import pytest
 from probability_sonification.stochastic_music import (
     DrumSoundSamplingConfig,
     EventCountSamplingConfig,
+    EventCountDistribution,
     EventPitchSamplingConfig,
+    EventPitchDistribution,
     EventTimeSamplingConfig,
     SamplingBackend,
     ScipyDrumSoundSampler,
@@ -111,3 +113,21 @@ def test_sampler_suite_identifies_distributions_and_backend():
     assert suite.metadata.event_time["distribution"] == "uniform"
     assert suite.metadata.event_pitch["distribution"] == "normal"
     assert suite.metadata.drum_sound["distribution"] == "categorical"
+
+
+def test_placeholder_distributions_fail_explicitly_if_called():
+    with pytest.raises(NotImplementedError, match="not implemented yet"):
+        ScipyEventCountSampler().sample_event_counts(
+            1,
+            2,
+            EventCountSamplingConfig(2.5, EventCountDistribution.BINOMIAL),
+            random_seed=42,
+        )
+    with pytest.raises(NotImplementedError, match="not implemented yet"):
+        ScipyEventPitchSampler().sample_event_pitches(
+            2,
+            EventPitchSamplingConfig(
+                60, 10, 48, 72, EventPitchDistribution.UNIFORM
+            ),
+            random_seed=42,
+        )
