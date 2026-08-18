@@ -27,6 +27,9 @@ from probability_sonification.stochastic_music.plots import (
     event_timeline_plot,
     note_map_plot,
 )
+from probability_sonification.stochastic_music.page import (
+    render_stochastic_music_experiment,
+)
 from probability_sonification.stochastic_music.samplers import (
     EventCountSampler,
     EventPitchSampler,
@@ -71,4 +74,5 @@ __all__ = [
     "midi_to_bytes",
     "note_map_plot",
     "populate_event_matrix",
+    "render_stochastic_music_experiment",
 ]
