@@ -1,5 +1,6 @@
 import altair as alt
 import numpy as np
+import pretty_midi
 import streamlit as st
 
 from probability_sonification.distributions import (
@@ -121,6 +122,57 @@ def distribution_chart(samples: np.ndarray, name: str, discrete: bool, color: st
     return chart.properties(title=f"{name} sample", height=260).configure_view(strokeOpacity=0)
 
 
+def piano_roll_chart(
+    midi: pretty_midi.PrettyMIDI, color: str, frames_per_second: int = 20
+):
+    piano_roll = midi.get_piano_roll(
+        fs=frames_per_second, pedal_threshold=None
+    )
+    pitches, frames = np.nonzero(piano_roll)
+    cells = [
+        {
+            "Start": float(frame / frames_per_second),
+            "End": float((frame + 1) / frames_per_second),
+            "Pitch": int(pitch),
+            "Note": pretty_midi.note_number_to_name(pitch),
+            "Intensity": float(piano_roll[pitch, frame]),
+        }
+        for pitch, frame in zip(pitches, frames, strict=True)
+    ]
+    maximum_intensity = max(cell["Intensity"] for cell in cells)
+    return (
+        alt.Chart(alt.Data(values=cells))
+        .mark_rect()
+        .encode(
+            x=alt.X("Start:Q", title="Time (seconds)"),
+            x2="End:Q",
+            y=alt.Y(
+                "Note:N",
+                title="Note",
+                sort=alt.SortField(field="Pitch", order="ascending"),
+            ),
+            color=alt.Color(
+                "Intensity:Q",
+                title="Velocity",
+                scale=alt.Scale(
+                    domain=[0, maximum_intensity],
+                    range=["#00000000", color],
+                ),
+                legend=None,
+            ),
+            tooltip=[
+                alt.Tooltip("Note:N"),
+                alt.Tooltip("Pitch:Q"),
+                alt.Tooltip("Start:Q", format=".2f"),
+                alt.Tooltip("End:Q", format=".2f"),
+                alt.Tooltip("Intensity:Q", title="Velocity", format=".0f"),
+            ],
+        )
+        .properties(title="Piano roll", height=220)
+        .configure_view(strokeOpacity=0)
+    )
+
+
 def controls(side: str, default_distribution: str, default_instrument: str):
     distribution_names = sorted(DISTRIBUTIONS)
     distribution_name = st.selectbox(
@@ -153,6 +205,7 @@ def present_result(
         distribution_chart(samples, name, DISTRIBUTIONS[name].discrete, color),
         width="stretch",
     )
+    st.altair_chart(piano_roll_chart(result.midi, color), width="stretch")
     metric_columns = st.columns(3)
     metric_columns[0].metric("Minimum", f"{np.min(samples):.2f}")
     metric_columns[1].metric("Mean", f"{np.mean(samples):.2f}")
