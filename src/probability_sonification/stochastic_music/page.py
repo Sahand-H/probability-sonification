@@ -335,67 +335,81 @@ def render_stochastic_music_experiment() -> None:
     if result is None:
         return
 
-    st.header("Preview")
-    metrics = st.columns(3)
-    metrics[0].metric("Musical events", result.event_matrix.total_event_count)
-    metrics[1].metric("Instruments", len(result.config.selected_instruments))
-    metrics[2].metric("Duration", f"{result.config.composition_duration:g} s")
+    with st.container(border=True, key="generated-section-summary"):
+        st.header("Preview")
+        metrics = st.columns(3)
+        metrics[0].metric("Musical events", result.event_matrix.total_event_count)
+        metrics[1].metric("Instruments", len(result.config.selected_instruments))
+        metrics[2].metric("Duration", f"{result.config.composition_duration:g} s")
 
-    st.altair_chart(event_matrix_plot(result.event_matrix), width="stretch")
-    st.altair_chart(
-        event_timeline_plot(result.events, result.config),
-        width="stretch",
-    )
-    if any(not event.is_drum for event in result.events):
+    with st.container(border=True, key="generated-section-visualizations"):
+        st.subheader("Visualizations")
+        st.altair_chart(event_matrix_plot(result.event_matrix), width="stretch")
         st.altair_chart(
-            event_pitch_distribution_plot(
-                result.events,
-                tuple(
-                    instrument.name
-                    for instrument in result.config.selected_instruments
-                    if not instrument.is_drum
+            event_timeline_plot(result.events, result.config),
+            width="stretch",
+        )
+        if any(not event.is_drum for event in result.events):
+            pitched_instruments = tuple(
+                instrument.name
+                for instrument in result.config.selected_instruments
+                if not instrument.is_drum
+            )
+            selected_pitch_instrument = st.selectbox(
+                "Pitch distribution instrument",
+                options=pitched_instruments,
+                key="stochastic-pitch-distribution-instrument",
+            )
+            st.altair_chart(
+                event_pitch_distribution_plot(
+                    result.events,
+                    (selected_pitch_instrument,),
+                    (
+                        result.config.event_pitch_sampling.minimum_pitch,
+                        result.config.event_pitch_sampling.maximum_pitch,
+                    ),
                 ),
+                width="stretch",
+            )
+        if any(event.is_drum for event in result.events):
+            st.altair_chart(
+                drum_sound_distribution_plot(
+                    result.events,
+                    tuple(
+                        instrument.name
+                        for instrument in result.config.selected_instruments
+                        if instrument.is_drum
+                    ),
+                ),
+                width="stretch",
+            )
+        st.altair_chart(
+            note_map_plot(
+                result.events,
+                tuple(instrument.name for instrument in result.config.selected_instruments),
             ),
             width="stretch",
         )
-    if any(event.is_drum for event in result.events):
-        st.altair_chart(
-            drum_sound_distribution_plot(
-                result.events,
-                tuple(
-                    instrument.name
-                    for instrument in result.config.selected_instruments
-                    if instrument.is_drum
-                ),
-            ),
+
+    with st.container(border=True, key="generated-section-audio"):
+        st.subheader("Audio preview")
+        st.audio(st.session_state["stochastic_music_audio"], format="audio/wav")
+        st.download_button(
+            "Download MIDI",
+            data=result.midi_bytes,
+            file_name="stochastic-music.mid",
+            mime="audio/midi",
             width="stretch",
         )
-    st.altair_chart(
-        note_map_plot(
-            result.events,
-            tuple(instrument.name for instrument in result.config.selected_instruments),
-        ),
-        width="stretch",
-    )
+        if not st.session_state["stochastic_music_used_fluidsynth"]:
+            st.warning(
+                "FluidSynth is unavailable, so this is a sine-wave preview. "
+                "The MIDI download still contains the selected instruments."
+            )
 
-    st.subheader("Audio preview")
-    st.audio(st.session_state["stochastic_music_audio"], format="audio/wav")
-    st.download_button(
-        "Download MIDI",
-        data=result.midi_bytes,
-        file_name="stochastic-music.mid",
-        mime="audio/midi",
-        width="stretch",
-    )
-    if not st.session_state["stochastic_music_used_fluidsynth"]:
-        st.warning(
-            "FluidSynth is unavailable, so this is a sine-wave preview. "
-            "The MIDI download still contains the selected instruments."
-        )
-
-    with st.expander("Sampling summary"):
-        st.write(f"Backend: {_backend_label(result.sampler_metadata.backend)}")
-        st.write(
-            "Event counts: Poisson · Event times: Uniform · Event pitches: Normal · "
-            "Drum sounds: Categorical"
-        )
+        with st.expander("Sampling summary"):
+            st.write(f"Backend: {_backend_label(result.sampler_metadata.backend)}")
+            st.write(
+                "Event counts: Poisson · Event times: Uniform · Event pitches: Normal · "
+                "Drum sounds: Categorical"
+            )

@@ -46,8 +46,18 @@ def event_matrix_plot(event_matrix: EventMatrix):
             ),
             tooltip=["Instrument:N", "Time block:O", "Event count:Q"],
         )
-        .properties(title="Event matrix", height=max(120, 50 * event_matrix.n_instruments))
-        .configure_view(strokeOpacity=0)
+        .properties(
+            title="Event matrix",
+            height=max(190, 65 * event_matrix.n_instruments),
+            background="transparent",
+        )
+        .configure_view(fill="transparent", strokeOpacity=0)
+        .configure_axis(
+            grid=True,
+            gridColor="#9b969d",
+            gridOpacity=0.52,
+            gridDash=[2, 2],
+        )
     )
 
 
@@ -121,59 +131,119 @@ def event_timeline_plot(
         alt.layer(boundary_rules, event_marks)
         .properties(
             title="Event timeline",
-            height=max(140, 50 * len(instrument_names)),
+            height=max(210, 65 * len(instrument_names)),
+            background="transparent",
         )
-        .configure_view(strokeOpacity=0)
+        .configure_view(fill="transparent", strokeOpacity=0)
+        .configure_axis(
+            grid=True,
+            gridColor="#9b969d",
+            gridOpacity=0.52,
+            gridDash=[2, 2],
+        )
     )
 
 
 def event_pitch_distribution_plot(
     events: tuple[MusicalEvent, ...],
     instruments: tuple[str, ...],
+    pitch_range: tuple[int, int] = (0, 127),
 ):
-    """Plot the sampled pitch probability for each instrument."""
+    """Plot a pitch histogram with a kernel-density overlay."""
 
     pitch_values = [
         {"Instrument": event.instrument_name, "Pitch": event.pitch}
         for event in events
-        if not event.is_drum
+        if not event.is_drum and event.instrument_name in instruments
     ]
 
-    # Normalize each instrument separately so different event counts remain comparable.
-    return (
-        alt.Chart(alt.Data(values=pitch_values))
+    pitch_data = alt.Data(values=pitch_values)
+    color = alt.Color(
+        "Instrument:N",
+        scale=_instrument_color_scale(instruments),
+        legend=None,
+        sort=list(instruments),
+    )
+
+    # Express both layers as density so the histogram and KDE share one y-axis.
+    histogram = (
+        alt.Chart(pitch_data)
+        .transform_bin(
+            as_=["PitchBin", "PitchBinEnd"],
+            field="Pitch",
+            bin=alt.Bin(maxbins=16),
+        )
         .transform_aggregate(
             Count="count()",
-            groupby=["Instrument", "Pitch"],
+            groupby=["Instrument", "PitchBin", "PitchBinEnd"],
         )
         .transform_joinaggregate(
             Total="sum(Count)",
             groupby=["Instrument"],
         )
-        .transform_calculate(Probability="datum.Count / datum.Total")
-        .mark_bar()
+        .transform_calculate(
+            Density="datum.Count / (datum.Total * (datum.PitchBinEnd - datum.PitchBin))"
+        )
+        .mark_bar(opacity=0.68, strokeWidth=1)
         .encode(
-            x=alt.X("Pitch:O", title="MIDI pitch", sort="ascending"),
-            y=alt.Y("Probability:Q", title="Probability"),
-            color=alt.Color(
-                "Instrument:N",
-                scale=_instrument_color_scale(instruments),
-                legend=None,
+            x=alt.X(
+                "PitchBin:Q",
+                title="MIDI pitch",
+                scale=alt.Scale(domain=list(pitch_range)),
             ),
-            column=alt.Column(
-                "Instrument:N",
-                title=None,
-                sort=list(instruments),
-            ),
+            x2="PitchBinEnd:Q",
+            y=alt.Y("Density:Q", title="Density"),
+            y2=alt.Y2(datum=0),
+            color=color,
             tooltip=[
                 "Instrument:N",
-                "Pitch:O",
+                alt.Tooltip("PitchBin:Q", title="Pitch from", format=".1f"),
+                alt.Tooltip("PitchBinEnd:Q", title="Pitch to", format=".1f"),
                 "Count:Q",
-                alt.Tooltip("Probability:Q", format=".3f"),
+                alt.Tooltip("Density:Q", format=".3f"),
             ],
         )
-        .properties(title="Event pitch distribution", width=220, height=180)
-        .configure_view(strokeOpacity=0)
+    )
+    kde = (
+        alt.Chart(pitch_data)
+        .transform_density(
+            "Pitch",
+            as_=["Pitch", "Density"],
+            extent=list(pitch_range),
+            groupby=["Instrument"],
+        )
+        .mark_line(strokeWidth=3)
+        .encode(
+            x=alt.X(
+                "Pitch:Q",
+                title="MIDI pitch",
+                scale=alt.Scale(domain=list(pitch_range)),
+            ),
+            y=alt.Y("Density:Q", title="Density"),
+            color=color,
+            tooltip=[
+                "Instrument:N",
+                alt.Tooltip("Pitch:Q", format=".1f"),
+                alt.Tooltip("Density:Q", format=".3f"),
+            ],
+        )
+    )
+
+    return (
+        alt.layer(histogram, kde)
+        .properties(
+            title="Event pitch distribution",
+            width="container",
+            height=320,
+            background="transparent",
+        )
+        .configure_view(fill="transparent", strokeOpacity=0)
+        .configure_axis(
+            grid=True,
+            gridColor="#9b969d",
+            gridOpacity=0.52,
+            gridDash=[2, 2],
+        )
     )
 
 
@@ -205,8 +275,18 @@ def drum_sound_distribution_plot(
             ),
             tooltip=["Instrument:N", "Drum sound:N", alt.Tooltip("count():Q")],
         )
-        .properties(title="Drum sound distribution", height=200)
-        .configure_view(strokeOpacity=0)
+        .properties(
+            title="Drum sound distribution",
+            height=280,
+            background="transparent",
+        )
+        .configure_view(fill="transparent", strokeOpacity=0)
+        .configure_axis(
+            grid=True,
+            gridColor="#9b969d",
+            gridOpacity=0.52,
+            gridDash=[2, 2],
+        )
     )
 
 
@@ -253,6 +333,12 @@ def note_map_plot(
                 "Velocity:Q",
             ],
         )
-        .properties(title="Note map", height=260)
-        .configure_view(strokeOpacity=0)
+        .properties(title="Note map", height=360, background="transparent")
+        .configure_view(fill="transparent", strokeOpacity=0)
+        .configure_axis(
+            grid=True,
+            gridColor="#9b969d",
+            gridOpacity=0.52,
+            gridDash=[2, 2],
+        )
     )

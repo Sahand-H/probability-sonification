@@ -1,0 +1,62 @@
+[server]
+enableStaticServing = true
+
+[theme]
+base = "light"
+primaryColor = "#7367A9"
+backgroundColor = "#F6F2EA"
+secondaryBackgroundColor = "#FBF8F2"
+textColor = "#242128"
+font = "Manrope, sans-serif"
+headingFont = "Manrope, sans-serif"
+codeFont = "monospace"
+baseFontSize = 16
+baseFontWeight = 400
+headingFontWeights = [600, 600, 600, 600, 600, 600]
+baseRadius = "0.75rem"
+buttonRadius = "0.65rem"
+borderColor = "rgba(47, 41, 51, 0.13)"
+showWidgetBorder = true
+showSidebarBorder = true
+chartCategoricalColors = ["#7367A9", "#9EAE91", "#75AEB7", "#D5A95F"]
+
+[[theme.fontFaces]]
+family = "Manrope"
+url = "app/static/fonts/Manrope-Regular.ttf"
+weight = "400"
+style = "normal"
+
+[[theme.fontFaces]]
+family = "Manrope"
+url = "app/static/fonts/Manrope-SemiBold.ttf"
+weight = "600"
+style = "normal"
+
+[[theme.fontFaces]]
+family = "Manrope"
+url = "app/static/fonts/Manrope-Bold.ttf"
+weight = "700"
+style = "normal"
+
+[theme.dark]
+primaryColor = "#A99BD4"
+backgroundColor = "#1B1A1D"
+secondaryBackgroundColor = "#222125"
+textColor = "#F2EEE8"
+borderColor = "rgba(255, 255, 255, 0.11)"
+
+[theme.light]
+primaryColor = "#7367A9"
+backgroundColor = "#F6F2EA"
+secondaryBackgroundColor = "#FBF8F2"
+textColor = "#242128"
+borderColor = "rgba(47, 41, 51, 0.13)"
+
+[theme.sidebar]
+backgroundColor = "#EEE9DF"
+
+[theme.dark.sidebar]
+backgroundColor = "#222125"
+
+[theme.light.sidebar]
+backgroundColor = "#EEE9DF"

@@ -38,6 +38,9 @@ def test_distribution_sonification_destination():
     assert app.title[0].value == "Distribution Sonification"
     assert app.caption[0].value == "Experiment 1"
     assert app.button[0].label == "Generate comparison"
+    assert app.toggle[0].label == "Use reproducible seed"
+    assert app.toggle[0].value is False
+    assert "Random seed" not in [widget.label for widget in app.number_input]
     instrument_defaults = [
         selectbox.value
         for selectbox in app.selectbox
@@ -47,6 +50,18 @@ def test_distribution_sonification_destination():
         "Acoustic Grand Piano",
         "Acoustic Grand Piano",
     ]
+
+
+def test_distribution_sonification_reproducible_seed_control():
+    app = AppTest.from_file(ROOT / "pages" / "experiment_1.py").run()
+
+    app.toggle[0].set_value(True).run()
+
+    assert not app.exception
+    random_seed = next(
+        widget for widget in app.number_input if widget.label == "Random seed"
+    )
+    assert random_seed.value == 42
 
 
 def test_stochastic_music_generator_destination():

@@ -8,6 +8,10 @@ from probability_sonification.distributions import (
     sample_distribution,
 )
 from probability_sonification.sonification import MappingConfig, render_audio, sonify
+from probability_sonification.theme import apply_surface_theme
+
+
+apply_surface_theme()
 
 
 INSTRUMENTS = [
@@ -88,7 +92,16 @@ def distribution_chart(samples: np.ndarray, name: str, discrete: bool, color: st
                 tooltip=[alt.Tooltip("Sample value:Q", format=".3f"), alt.Tooltip("Density:Q", format=".3f")],
             )
         )
-    return chart.properties(title=f"{name} sample", height=260).configure_view(strokeOpacity=0)
+    return chart.properties(
+        title=f"{name} sample",
+        height=340,
+        background="transparent",
+    ).configure_view(fill="transparent", strokeOpacity=0).configure_axis(
+        grid=True,
+        gridColor="#9b969d",
+        gridOpacity=0.52,
+        gridDash=[2, 2],
+    )
 
 
 def piano_roll_chart(
@@ -137,8 +150,14 @@ def piano_roll_chart(
                 alt.Tooltip("Intensity:Q", title="Velocity", format=".0f"),
             ],
         )
-        .properties(title="Piano roll", height=220)
-        .configure_view(strokeOpacity=0)
+        .properties(title="Piano roll", height=300, background="transparent")
+        .configure_view(fill="transparent", strokeOpacity=0)
+        .configure_axis(
+            grid=True,
+            gridColor="#9b969d",
+            gridOpacity=0.52,
+            gridDash=[2, 2],
+        )
     )
 
 
@@ -211,24 +230,31 @@ with st.expander("How the sonification works"):
 
 left, right = st.columns(2, gap="large")
 with left:
-    st.subheader("Distribution A")
-    left_settings = controls("A", "Uniform", "Acoustic Grand Piano")
+    with st.container(border=True, key="experiment-control-card-a"):
+        st.subheader("Distribution A")
+        left_settings = controls("A", "Uniform", "Acoustic Grand Piano")
 with right:
-    st.subheader("Distribution B")
-    right_settings = controls("B", "Poisson", "Acoustic Grand Piano")
+    with st.container(border=True, key="experiment-control-card-b"):
+        st.subheader("Distribution B")
+        right_settings = controls("B", "Poisson", "Acoustic Grand Piano")
 
 with st.expander("Shared sampling", expanded=True):
-    st.caption("Both distributions use the same sample size and random seed.")
+    st.caption("Both distributions always use the same sample size and seed.")
     sample_size = st.number_input(
         "Sample size", min_value=8, max_value=500, value=50, step=1
     )
-    seed = st.number_input(
-        "Random seed",
-        min_value=0,
-        max_value=2_147_483_647,
-        value=42,
-        step=1,
-    )
+    use_reproducible_seed = st.toggle("Use reproducible seed", value=False)
+    seed = None
+    if use_reproducible_seed:
+        seed = int(
+            st.number_input(
+                "Random seed",
+                min_value=0,
+                max_value=2_147_483_647,
+                value=42,
+                step=1,
+            )
+        )
 
 with st.expander("Note articulation", expanded=True):
     st.caption(
@@ -264,6 +290,11 @@ with st.expander("Pitch mapping", expanded=False):
 
 generate = st.button("Generate comparison", type="primary", width="stretch")
 if generate:
+    comparison_seed = (
+        seed
+        if seed is not None
+        else int(np.random.default_rng().integers(0, 2_147_483_648))
+    )
     notes_per_second = 4.0
     seconds_per_note = 1.0 / notes_per_second
     config = MappingConfig(
@@ -276,33 +307,46 @@ if generate:
     )
     result_left, result_right = st.columns(2, gap="large")
     with result_left:
-        left_result = present_result(
-            "A", left_settings, "#cf704c", config, int(sample_size), int(seed)
-        )
+        with st.container(border=True, key="generated-section-distribution-a"):
+            left_result = present_result(
+                "A",
+                left_settings,
+                "#7367a9",
+                config,
+                int(sample_size),
+                comparison_seed,
+            )
     with result_right:
-        right_result = present_result(
-            "B", right_settings, "#82a58f", config, int(sample_size), int(seed)
-        )
+        with st.container(border=True, key="generated-section-distribution-b"):
+            right_result = present_result(
+                "B",
+                right_settings,
+                "#9eae91",
+                config,
+                int(sample_size),
+                comparison_seed,
+            )
 
-    with st.expander("Pitch clipping report", expanded=True):
-        st.caption(
-            "Notes outside the shared MIDI range of 36–96 are moved to the nearest limit."
-        )
-        report_columns = st.columns(2, gap="large")
-        for column, label, result in (
-            (report_columns[0], "Distribution A", left_result),
-            (report_columns[1], "Distribution B", right_result),
-        ):
-            with column:
-                clipped_total = result.clipped_low + result.clipped_high
-                st.markdown(f"**{label}**")
-                metrics = st.columns(3)
-                metrics[0].metric("Total", f"{clipped_total}/{sample_size}")
-                metrics[1].metric("Low", result.clipped_low)
-                metrics[2].metric("High", result.clipped_high)
-                if clipped_total == 0:
-                    st.success("No pitch clipping.")
-                else:
-                    st.warning(
-                        f"{clipped_total / sample_size:.1%} of notes were clipped."
-                    )
+    with st.container(border=True, key="generated-section-clipping"):
+        with st.expander("Pitch clipping report", expanded=True):
+            st.caption(
+                "Notes outside the shared MIDI range of 36–96 are moved to the nearest limit."
+            )
+            report_columns = st.columns(2, gap="large")
+            for column, label, result in (
+                (report_columns[0], "Distribution A", left_result),
+                (report_columns[1], "Distribution B", right_result),
+            ):
+                with column:
+                    clipped_total = result.clipped_low + result.clipped_high
+                    st.markdown(f"**{label}**")
+                    metrics = st.columns(3)
+                    metrics[0].metric("Total", f"{clipped_total}/{sample_size}")
+                    metrics[1].metric("Low", result.clipped_low)
+                    metrics[2].metric("High", result.clipped_high)
+                    if clipped_total == 0:
+                        st.success("No pitch clipping.")
+                    else:
+                        st.warning(
+                            f"{clipped_total / sample_size:.1%} of notes were clipped."
+                        )
