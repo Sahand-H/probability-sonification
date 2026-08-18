@@ -158,6 +158,7 @@ def render_stochastic_music_experiment() -> None:
     """Render controls and results for stochastic music generation."""
 
     st.title("Stochastic Music Generator")
+    st.caption("Experiment 2")
     st.write(
         "Populate a matrix of musical events, sample when each event begins and "
         "which pitch it plays, then hear the resulting multi-instrument composition."

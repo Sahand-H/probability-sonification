@@ -1,5 +1,6 @@
-import streamlit as st
+from probability_sonification.stochastic_music.page import (
+    render_stochastic_music_experiment,
+)
 
 
-st.title("Experiment 2")
-st.info("Coming soon.")
+render_stochastic_music_experiment()

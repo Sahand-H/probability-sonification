@@ -2,7 +2,7 @@ import streamlit as st
 
 
 st.set_page_config(
-    page_title="Probability Sonification",
+    page_title="Probability Sonification Lab",
     page_icon="♫",
     layout="wide",
 )
@@ -34,14 +34,19 @@ st.markdown(
 navigation = st.navigation(
     [
         st.Page(
-            "pages/experiment_1.py",
-            title="Experiment 1",
-            icon=":material/graphic_eq:",
+            "pages/landing.py",
+            title="Probability Sonification Lab",
+            icon=":material/home:",
             default=True,
         ),
         st.Page(
+            "pages/experiment_1.py",
+            title="Distribution Sonification",
+            icon=":material/graphic_eq:",
+        ),
+        st.Page(
             "pages/experiment_2.py",
-            title="Experiment 2",
+            title="Stochastic Music Generator",
             icon=":material/music_note:",
         ),
     ]

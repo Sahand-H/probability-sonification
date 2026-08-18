@@ -193,7 +193,8 @@ def present_result(
     return result
 
 
-st.title("Basic sonification of probability distributions.")
+st.title("Distribution Sonification")
+st.caption("Experiment 1")
 st.write(
     "Choose two distributions, draw samples, and compare the patterns after mapping every value to pitch. Both sides use the same scale, so equal values produce equal notes."
 )
