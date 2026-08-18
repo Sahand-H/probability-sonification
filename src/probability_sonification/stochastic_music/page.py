@@ -734,7 +734,7 @@ def render_stochastic_music_experiment() -> None:
 
     _render_guided_setup()
 
-    with st.expander("Instruments", expanded=True):
+    with st.expander("Instruments", expanded=False):
         _render_instrument_selection_styles()
         st.caption(
             "Select at least one instrument. Their catalog order is preserved in "
@@ -799,7 +799,7 @@ def render_stochastic_music_experiment() -> None:
             help="Override the shared count, time, and pitch profile for each instrument.",
         )
 
-    with st.expander("Composition", expanded=True):
+    with st.expander("Composition", expanded=False):
         composition_columns = st.columns(2)
         composition_duration = composition_columns[0].number_input(
             "Composition duration (seconds)",
@@ -836,7 +836,7 @@ def render_stochastic_music_experiment() -> None:
             "Composition duration limits when notes may start; notes may finish after it."
         )
 
-    with st.expander("Sampling", expanded=True):
+    with st.expander("Sampling", expanded=False):
         sampling_backend = st.selectbox(
             "Sampling backend",
             options=list(SamplingBackend),
