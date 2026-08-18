@@ -8,13 +8,16 @@ from probability_sonification.stochastic_music.models import (
     EventMatrix,
     EventSlot,
     MusicalEvent,
+    StochasticMusicResult,
     StochasticMusicConfig,
     TimedEvent,
 )
+from probability_sonification.stochastic_music.midi import build_midi, midi_to_bytes
 from probability_sonification.stochastic_music.samplers import (
     EventCountSampler,
     EventPitchSampler,
     EventTimeSampler,
+    SamplerSuite,
 )
 
 
@@ -163,3 +166,39 @@ def assign_event_pitches(
             )
         )
     return tuple(events)
+
+
+def generate_stochastic_music(
+    config: StochasticMusicConfig,
+    sampler_suite: SamplerSuite,
+) -> StochasticMusicResult:
+    """Run the complete backend-neutral stochastic music pipeline."""
+
+    if sampler_suite.backend is not config.sampling_backend:
+        raise ValueError("Sampler suite backend does not match the configuration.")
+    if sampler_suite.metadata.backend is not sampler_suite.backend:
+        raise ValueError("Sampler metadata backend does not match its suite.")
+
+    event_matrix = populate_event_matrix(config, sampler_suite.event_count_sampler)
+    event_slots = expand_event_matrix(event_matrix)
+    timed_events = assign_event_times(
+        event_slots,
+        config,
+        sampler_suite.event_time_sampler,
+    )
+    events = assign_event_pitches(
+        timed_events,
+        config,
+        sampler_suite.event_pitch_sampler,
+    )
+
+    # Keep the MIDI object for visualization and bytes for direct download.
+    midi = build_midi(events, config.selected_instruments)
+    return StochasticMusicResult(
+        config=config,
+        event_matrix=event_matrix,
+        events=events,
+        midi=midi,
+        midi_bytes=midi_to_bytes(midi),
+        sampler_metadata=sampler_suite.metadata,
+    )

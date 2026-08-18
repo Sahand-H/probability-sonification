@@ -17,8 +17,10 @@ from probability_sonification.stochastic_music.pipeline import (
     assign_event_pitches,
     assign_event_times,
     expand_event_matrix,
+    generate_stochastic_music,
     populate_event_matrix,
 )
+from probability_sonification.stochastic_music.midi import build_midi, midi_to_bytes
 from probability_sonification.stochastic_music.samplers import (
     EventCountSampler,
     EventPitchSampler,
@@ -53,7 +55,10 @@ __all__ = [
     "TimedEvent",
     "assign_event_pitches",
     "assign_event_times",
+    "build_midi",
     "create_scipy_sampler_suite",
     "expand_event_matrix",
+    "generate_stochastic_music",
+    "midi_to_bytes",
     "populate_event_matrix",
 ]
