@@ -1,0 +1,165 @@
+"""Backend-neutral transformations for creating musical events."""
+
+from collections import defaultdict
+
+import numpy as np
+
+from probability_sonification.stochastic_music.models import (
+    EventMatrix,
+    EventSlot,
+    MusicalEvent,
+    StochasticMusicConfig,
+    TimedEvent,
+)
+from probability_sonification.stochastic_music.samplers import (
+    EventCountSampler,
+    EventPitchSampler,
+    EventTimeSampler,
+)
+
+
+_EVENT_COUNT_TASK = 0
+_EVENT_TIME_TASK = 1
+_EVENT_PITCH_TASK = 2
+
+
+def _derive_seed(
+    random_seed: int | None,
+    task: int,
+    *coordinates: int,
+) -> int | None:
+    """Derive a stable seed without sharing random state between tasks."""
+
+    if random_seed is None:
+        return None
+
+    seed_sequence = np.random.SeedSequence(
+        random_seed,
+        spawn_key=(task, *coordinates),
+    )
+    return int(seed_sequence.generate_state(1)[0])
+
+
+def populate_event_matrix(
+    config: StochasticMusicConfig,
+    sampler: EventCountSampler,
+) -> EventMatrix:
+    """Populate event counts for every selected instrument and time block."""
+
+    counts = sampler.sample_event_counts(
+        n_instruments=len(config.selected_instruments),
+        n_time_blocks=config.n_time_blocks,
+        config=config.event_count_sampling,
+        random_seed=_derive_seed(config.random_seed, _EVENT_COUNT_TASK),
+    )
+
+    # EventMatrix provides the common validation boundary for every backend.
+    return EventMatrix(counts=counts, instruments=config.selected_instruments)
+
+
+def expand_event_matrix(event_matrix: EventMatrix) -> tuple[EventSlot, ...]:
+    """Expand each matrix count into individually addressable event slots."""
+
+    slots = []
+    for instrument_index, instrument_name in enumerate(event_matrix.instruments):
+        for time_block_index in range(event_matrix.n_time_blocks):
+            event_count = int(event_matrix.counts[instrument_index, time_block_index])
+            for event_index in range(event_count):
+                slots.append(
+                    EventSlot(
+                        instrument_index=instrument_index,
+                        instrument_name=instrument_name,
+                        time_block_index=time_block_index,
+                        event_index_within_block=event_index,
+                    )
+                )
+    return tuple(slots)
+
+
+def assign_event_times(
+    slots: tuple[EventSlot, ...],
+    config: StochasticMusicConfig,
+    sampler: EventTimeSampler,
+) -> tuple[TimedEvent, ...]:
+    """Sample, sort, and assign event start times within each time block."""
+
+    grouped_slots: dict[tuple[int, int], list[EventSlot]] = defaultdict(list)
+    for slot in slots:
+        group_key = (slot.instrument_index, slot.time_block_index)
+        grouped_slots[group_key].append(slot)
+
+    time_block_duration = config.composition_duration / config.n_time_blocks
+    timed_events = []
+
+    for (instrument_index, time_block_index), group in grouped_slots.items():
+        block_start = time_block_index * time_block_duration
+        block_end = block_start + time_block_duration
+        sampled_times = np.asarray(
+            sampler.sample_event_times(
+                n_events=len(group),
+                block_start=block_start,
+                block_end=block_end,
+                config=config.event_time_sampling,
+                random_seed=_derive_seed(
+                    config.random_seed,
+                    _EVENT_TIME_TASK,
+                    instrument_index,
+                    time_block_index,
+                ),
+            ),
+            dtype=float,
+        )
+
+        if sampled_times.shape != (len(group),):
+            raise ValueError("Event time sampler returned an unexpected shape.")
+        if not np.all(np.isfinite(sampled_times)):
+            raise ValueError("Event time sampler returned non-finite values.")
+        if np.any(sampled_times < block_start) or np.any(sampled_times >= block_end):
+            raise ValueError("Event time sampler returned values outside the time block.")
+
+        # Sorting makes event indexes chronological regardless of backend behavior.
+        for slot, start_time in zip(group, np.sort(sampled_times), strict=True):
+            timed_events.append(TimedEvent(slot=slot, start_time=float(start_time)))
+
+    return tuple(timed_events)
+
+
+def assign_event_pitches(
+    timed_events: tuple[TimedEvent, ...],
+    config: StochasticMusicConfig,
+    sampler: EventPitchSampler,
+) -> tuple[MusicalEvent, ...]:
+    """Sample pitches and create complete musical events."""
+
+    sampled_pitches = np.asarray(
+        sampler.sample_event_pitches(
+            n_events=len(timed_events),
+            config=config.event_pitch_sampling,
+            random_seed=_derive_seed(config.random_seed, _EVENT_PITCH_TASK),
+        )
+    )
+    if sampled_pitches.shape != (len(timed_events),):
+        raise ValueError("Event pitch sampler returned an unexpected shape.")
+    if not np.issubdtype(sampled_pitches.dtype, np.integer):
+        raise ValueError("Event pitch sampler must return integer MIDI pitches.")
+    if np.any(sampled_pitches < config.event_pitch_sampling.minimum_pitch) or np.any(
+        sampled_pitches > config.event_pitch_sampling.maximum_pitch
+    ):
+        raise ValueError("Event pitch sampler returned values outside the pitch limits.")
+
+    events = []
+    for timed_event, pitch in zip(timed_events, sampled_pitches, strict=True):
+        slot = timed_event.slot
+        events.append(
+            MusicalEvent(
+                instrument_index=slot.instrument_index,
+                instrument_name=slot.instrument_name,
+                time_block_index=slot.time_block_index,
+                event_index_within_block=slot.event_index_within_block,
+                start_time=timed_event.start_time,
+                duration=config.note_duration,
+                pitch=int(pitch),
+                velocity=config.note_velocity,
+            )
+        )
+    return tuple(events)

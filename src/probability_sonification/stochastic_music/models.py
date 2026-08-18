@@ -130,6 +130,14 @@ class EventSlot:
 
 
 @dataclass(frozen=True)
+class TimedEvent:
+    """An event slot after a start time has been assigned."""
+
+    slot: EventSlot
+    start_time: float
+
+
+@dataclass(frozen=True)
 class MusicalEvent:
     """A complete event after time and pitch sampling."""
 
