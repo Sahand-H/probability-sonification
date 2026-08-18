@@ -2,18 +2,24 @@ import numpy as np
 import pytest
 
 from probability_sonification.stochastic_music import (
+    DrumSoundSamplingConfig,
     EventCountSamplingConfig,
     EventMatrix,
     EventPitchSamplingConfig,
     EventTimeSamplingConfig,
+    InstrumentDefinition,
     SamplingBackend,
     StochasticMusicConfig,
 )
 
 
 def make_config(**overrides) -> StochasticMusicConfig:
+    instruments = (
+        InstrumentDefinition("Acoustic Grand Piano", "Piano", 0),
+        InstrumentDefinition("Violin", "Solo strings", 40),
+    )
     values = {
-        "selected_instruments": ("Acoustic Grand Piano", "Violin"),
+        "selected_instruments": instruments,
         "composition_duration": 60.0,
         "n_time_blocks": 12,
         "note_duration": 2.0,
@@ -28,6 +34,10 @@ def make_config(**overrides) -> StochasticMusicConfig:
             minimum_pitch=0,
             maximum_pitch=127,
         ),
+        "drum_sound_sampling": DrumSoundSamplingConfig(
+            sounds=(36, 38),
+            probabilities=(0.5, 0.5),
+        ),
     }
     values.update(overrides)
     return StochasticMusicConfig(**values)
@@ -36,7 +46,10 @@ def make_config(**overrides) -> StochasticMusicConfig:
 def test_stochastic_music_config_accepts_reviewed_settings():
     config = make_config()
 
-    assert config.selected_instruments == ("Acoustic Grand Piano", "Violin")
+    assert [instrument.name for instrument in config.selected_instruments] == [
+        "Acoustic Grand Piano",
+        "Violin",
+    ]
     assert config.random_seed == 42
 
 
@@ -80,3 +93,5 @@ def test_sampling_configs_validate_distribution_parameters():
         EventPitchSamplingConfig(60, 0, 0, 127)
     with pytest.raises(ValueError, match="valid MIDI range"):
         EventPitchSamplingConfig(60, 10, -1, 127)
+    with pytest.raises(ValueError, match="sum to one"):
+        DrumSoundSamplingConfig((36, 38), (0.2, 0.2))

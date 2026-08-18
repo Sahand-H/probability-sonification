@@ -6,6 +6,7 @@ from typing import Protocol
 import numpy as np
 
 from probability_sonification.stochastic_music.models import (
+    DrumSoundSamplingConfig,
     EventCountSamplingConfig,
     EventPitchSamplingConfig,
     EventTimeSamplingConfig,
@@ -50,6 +51,17 @@ class EventPitchSampler(Protocol):
     ) -> np.ndarray: ...
 
 
+class DrumSoundSampler(Protocol):
+    """Assign categorical General MIDI sounds to drum events."""
+
+    def sample_drum_sounds(
+        self,
+        n_events: int,
+        config: DrumSoundSamplingConfig,
+        random_seed: int | None,
+    ) -> np.ndarray: ...
+
+
 @dataclass(frozen=True)
 class SamplerSuite:
     """All task-specific samplers supplied by one backend."""
@@ -59,4 +71,5 @@ class SamplerSuite:
     event_count_sampler: EventCountSampler
     event_time_sampler: EventTimeSampler
     event_pitch_sampler: EventPitchSampler
+    drum_sound_sampler: DrumSoundSampler
     metadata: SamplerMetadata

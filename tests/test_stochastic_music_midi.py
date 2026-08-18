@@ -1,10 +1,14 @@
+from dataclasses import replace
+
 import numpy as np
 import pytest
 
 from probability_sonification.stochastic_music import (
+    DrumSoundSamplingConfig,
     EventCountSamplingConfig,
     EventPitchSamplingConfig,
     EventTimeSamplingConfig,
+    InstrumentDefinition,
     MusicalEvent,
     SamplerMetadata,
     SamplerSuite,
@@ -19,7 +23,10 @@ from probability_sonification.stochastic_music import (
 
 def make_config() -> StochasticMusicConfig:
     return StochasticMusicConfig(
-        selected_instruments=("Acoustic Grand Piano", "Violin"),
+        selected_instruments=(
+            InstrumentDefinition("Acoustic Grand Piano", "Piano", 0),
+            InstrumentDefinition("Violin", "Solo strings", 40),
+        ),
         composition_duration=10,
         n_time_blocks=2,
         note_duration=2,
@@ -29,11 +36,15 @@ def make_config() -> StochasticMusicConfig:
         event_count_sampling=EventCountSamplingConfig(rate=1.5),
         event_time_sampling=EventTimeSamplingConfig(),
         event_pitch_sampling=EventPitchSamplingConfig(60, 5, 48, 72),
+        drum_sound_sampling=DrumSoundSamplingConfig((36, 38), (0.5, 0.5)),
     )
 
 
 def test_build_midi_preserves_track_order_and_event_timing():
-    instruments = ("Acoustic Grand Piano", "Violin")
+    instruments = (
+        InstrumentDefinition("Acoustic Grand Piano", "Piano", 0),
+        InstrumentDefinition("Violin", "Solo strings", 40),
+    )
     events = (
         MusicalEvent(1, "Violin", 0, 0, 1.5, 2.0, 64, 90),
         MusicalEvent(0, "Acoustic Grand Piano", 0, 0, 0.5, 2.0, 60, 80),
@@ -41,21 +52,32 @@ def test_build_midi_preserves_track_order_and_event_timing():
 
     midi = build_midi(events, instruments)
 
-    assert [track.name for track in midi.instruments] == list(instruments)
+    assert [track.name for track in midi.instruments] == [
+        instrument.name for instrument in instruments
+    ]
     assert midi.instruments[0].notes[0].start == 0.5
     assert midi.instruments[0].notes[0].end == 2.5
     assert midi.instruments[1].notes[0].pitch == 64
 
 
 def test_build_midi_keeps_silent_selected_instruments():
-    midi = build_midi((), ("Acoustic Grand Piano", "Violin"))
+    midi = build_midi(
+        (),
+        (
+            InstrumentDefinition("Acoustic Grand Piano", "Piano", 0),
+            InstrumentDefinition("Violin", "Solo strings", 40),
+        ),
+    )
 
     assert len(midi.instruments) == 2
     assert all(not track.notes for track in midi.instruments)
 
 
 def test_midi_to_bytes_returns_standard_midi_data():
-    midi = build_midi((), ("Acoustic Grand Piano",))
+    midi = build_midi(
+        (),
+        (InstrumentDefinition("Acoustic Grand Piano", "Piano", 0),),
+    )
 
     assert midi_to_bytes(midi).startswith(b"MThd")
 
@@ -86,13 +108,44 @@ def test_generate_stochastic_music_rejects_mismatched_metadata_backend():
         event_count_sampler=scipy_suite.event_count_sampler,
         event_time_sampler=scipy_suite.event_time_sampler,
         event_pitch_sampler=scipy_suite.event_pitch_sampler,
+        drum_sound_sampler=scipy_suite.drum_sound_sampler,
         metadata=SamplerMetadata(
             backend=DifferentBackend("other"),
             event_count={},
             event_time={},
             event_pitch={},
+            drum_sound={},
         ),
     )
 
     with pytest.raises(ValueError, match="metadata backend"):
         generate_stochastic_music(make_config(), suite)
+
+
+def test_build_midi_creates_a_general_midi_drum_track():
+    drum = InstrumentDefinition("Drum Kit", "Percussion and drums", 0, is_drum=True)
+    event = MusicalEvent(0, "Drum Kit", 0, 0, 0.5, 1.0, 38, 90, is_drum=True)
+
+    midi = build_midi((event,), (drum,))
+
+    assert midi.instruments[0].is_drum
+    assert midi.instruments[0].notes[0].pitch == 38
+
+
+def test_generate_stochastic_music_supports_a_categorical_drum_track():
+    drum_config = replace(
+        make_config(),
+        selected_instruments=(
+            InstrumentDefinition("Drum Kit", "Percussion and drums", 0, is_drum=True),
+        ),
+        event_count_sampling=EventCountSamplingConfig(rate=10),
+    )
+
+    result = generate_stochastic_music(drum_config, create_scipy_sampler_suite())
+
+    assert result.events
+    assert all(event.is_drum for event in result.events)
+    assert set(event.pitch for event in result.events).issubset(
+        drum_config.drum_sound_sampling.sounds
+    )
+    assert result.midi.instruments[0].is_drum

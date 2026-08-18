@@ -38,6 +38,7 @@ def test_stochastic_music_page_initial_controls():
     assert "Harmonica" in checkbox_labels
     assert "Trumpet" in checkbox_labels
     assert "Trombone" in checkbox_labels
+    assert "Drum Kit" in checkbox_labels
     assert [group_name for group_name, _ in INSTRUMENT_GROUPS] == [
         "Piano",
         "Chromatic percussion",
@@ -49,7 +50,9 @@ def test_stochastic_music_page_initial_controls():
         "Reed",
         "Pipe",
         "Percussive",
+        "Percussion and drums",
     ]
+    assert "work in progress" in app.info[0].value
 
     app.toggle[0].set_value(True).run()
 
@@ -58,4 +61,7 @@ def test_stochastic_music_page_initial_controls():
 
 def test_all_instrument_options_are_valid_general_midi_names():
     for instrument in AVAILABLE_INSTRUMENTS:
-        assert isinstance(pretty_midi.instrument_name_to_program(instrument), int)
+        if instrument.is_drum:
+            assert instrument.program == 0
+        else:
+            assert pretty_midi.instrument_name_to_program(instrument.name) == instrument.program

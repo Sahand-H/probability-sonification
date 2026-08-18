@@ -1,14 +1,18 @@
+from dataclasses import replace
+
 import numpy as np
 import pytest
 
 from probability_sonification.stochastic_music import (
+    DrumSoundSamplingConfig,
     EventCountSamplingConfig,
     EventMatrix,
     EventPitchSamplingConfig,
     EventTimeSamplingConfig,
+    InstrumentDefinition,
     SamplingBackend,
     StochasticMusicConfig,
-    assign_event_pitches,
+    assign_event_notes,
     assign_event_times,
     expand_event_matrix,
     populate_event_matrix,
@@ -17,7 +21,10 @@ from probability_sonification.stochastic_music import (
 
 def make_config(random_seed=42) -> StochasticMusicConfig:
     return StochasticMusicConfig(
-        selected_instruments=("Piano", "Violin"),
+        selected_instruments=(
+            InstrumentDefinition("Piano", "Piano", 0),
+            InstrumentDefinition("Violin", "Solo strings", 40),
+        ),
         composition_duration=20,
         n_time_blocks=2,
         note_duration=2,
@@ -27,6 +34,7 @@ def make_config(random_seed=42) -> StochasticMusicConfig:
         event_count_sampling=EventCountSamplingConfig(rate=2.5),
         event_time_sampling=EventTimeSamplingConfig(),
         event_pitch_sampling=EventPitchSamplingConfig(60, 10, 48, 72),
+        drum_sound_sampling=DrumSoundSamplingConfig((36, 38), (0.5, 0.5)),
     )
 
 
@@ -62,6 +70,15 @@ class FixedPitchSampler:
         return np.arange(60, 60 + n_events, dtype=int)
 
 
+class FixedDrumSoundSampler:
+    def __init__(self):
+        self.seed = None
+
+    def sample_drum_sounds(self, n_events, config, random_seed):
+        self.seed = random_seed
+        return np.full(n_events, 38, dtype=int)
+
+
 def test_populate_and_expand_event_matrix():
     config = make_config()
     sampler = RecordingCountSampler()
@@ -84,7 +101,10 @@ def test_populate_and_expand_event_matrix():
 def test_assign_event_times_sorts_each_instrument_and_block_group():
     config = make_config()
     slots = expand_event_matrix(
-        EventMatrix(np.array([[2, 0], [1, 1]]), config.selected_instruments)
+        EventMatrix(
+            np.array([[2, 0], [1, 1]]),
+            tuple(instrument.name for instrument in config.selected_instruments),
+        )
     )
     sampler = ReverseTimeSampler()
 
@@ -96,13 +116,18 @@ def test_assign_event_times_sorts_each_instrument_and_block_group():
     assert len(set(sampler.seeds)) == 3
 
 
-def test_assign_event_pitches_creates_complete_events():
+def test_assign_event_notes_creates_complete_pitched_events():
     config = make_config()
     slots = expand_event_matrix(EventMatrix(np.array([[2, 0]]), ("Piano",)))
     timed_events = assign_event_times(slots, config, ReverseTimeSampler())
     sampler = FixedPitchSampler()
 
-    events = assign_event_pitches(timed_events, config, sampler)
+    events = assign_event_notes(
+        timed_events,
+        config,
+        sampler,
+        FixedDrumSoundSampler(),
+    )
 
     assert [event.pitch for event in events] == [60, 61]
     assert all(event.duration == 2 for event in events)
@@ -120,19 +145,31 @@ def test_task_seeds_are_repeatable_and_independent():
     time_sampler = ReverseTimeSampler()
     timed_events = assign_event_times(slots, config, time_sampler)
     pitch_sampler = FixedPitchSampler()
-    assign_event_pitches(timed_events, config, pitch_sampler)
+    drum_sampler = FixedDrumSoundSampler()
+    assign_event_notes(timed_events, config, pitch_sampler, drum_sampler)
 
-    first_seeds = (count_sampler.seed, time_sampler.seeds[0], pitch_sampler.seed)
+    first_seeds = (
+        count_sampler.seed,
+        time_sampler.seeds[0],
+        pitch_sampler.seed,
+        drum_sampler.seed,
+    )
 
     second_count = RecordingCountSampler()
     populate_event_matrix(config, second_count)
     second_time = ReverseTimeSampler()
     second_timed = assign_event_times(slots, config, second_time)
     second_pitch = FixedPitchSampler()
-    assign_event_pitches(second_timed, config, second_pitch)
+    second_drum = FixedDrumSoundSampler()
+    assign_event_notes(second_timed, config, second_pitch, second_drum)
 
-    assert first_seeds == (second_count.seed, second_time.seeds[0], second_pitch.seed)
-    assert len(set(first_seeds)) == 3
+    assert first_seeds == (
+        second_count.seed,
+        second_time.seeds[0],
+        second_pitch.seed,
+        second_drum.seed,
+    )
+    assert len(set(first_seeds)) == 4
 
 
 def test_pipeline_passes_none_seed_when_reproducibility_is_disabled():
@@ -156,7 +193,7 @@ def test_assign_event_times_rejects_values_outside_the_block():
         assign_event_times(slots, config, InvalidTimeSampler())
 
 
-def test_assign_event_pitches_rejects_non_integer_values():
+def test_assign_event_notes_rejects_non_integer_pitches():
     class InvalidPitchSampler:
         def sample_event_pitches(self, n_events, config, random_seed):
             return np.full(n_events, 60.5)
@@ -166,4 +203,35 @@ def test_assign_event_pitches_rejects_non_integer_values():
     timed_events = assign_event_times(slots, config, ReverseTimeSampler())
 
     with pytest.raises(ValueError, match="integer MIDI pitches"):
-        assign_event_pitches(timed_events, config, InvalidPitchSampler())
+        assign_event_notes(
+            timed_events,
+            config,
+            InvalidPitchSampler(),
+            FixedDrumSoundSampler(),
+        )
+
+
+def test_assign_event_notes_uses_categorical_sampler_for_drum_events():
+    config = replace(
+        make_config(),
+        selected_instruments=(
+            InstrumentDefinition("Piano", "Piano", 0),
+            InstrumentDefinition("Drum Kit", "Percussion and drums", 0, is_drum=True),
+        ),
+    )
+    slots = expand_event_matrix(
+        EventMatrix(np.array([[1, 0], [1, 0]]), ("Piano", "Drum Kit"))
+    )
+    timed_events = assign_event_times(slots, config, ReverseTimeSampler())
+
+    events = assign_event_notes(
+        timed_events,
+        config,
+        FixedPitchSampler(),
+        FixedDrumSoundSampler(),
+    )
+
+    assert events[0].pitch == 60
+    assert not events[0].is_drum
+    assert events[1].pitch == 38
+    assert events[1].is_drum

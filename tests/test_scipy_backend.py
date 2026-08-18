@@ -2,10 +2,12 @@ import numpy as np
 import pytest
 
 from probability_sonification.stochastic_music import (
+    DrumSoundSamplingConfig,
     EventCountSamplingConfig,
     EventPitchSamplingConfig,
     EventTimeSamplingConfig,
     SamplingBackend,
+    ScipyDrumSoundSampler,
     ScipyEventCountSampler,
     ScipyEventPitchSampler,
     ScipyEventTimeSampler,
@@ -62,6 +64,21 @@ def test_event_pitch_sampler_rounds_and_clips_to_midi_limits():
     assert 72 in pitches
 
 
+def test_drum_sound_sampler_uses_configured_categorical_choices():
+    sampler = ScipyDrumSoundSampler()
+    config = DrumSoundSamplingConfig(
+        sounds=(36, 38, 42),
+        probabilities=(0.2, 0.5, 0.3),
+    )
+
+    first = sampler.sample_drum_sounds(100, config, random_seed=42)
+    second = sampler.sample_drum_sounds(100, config, random_seed=42)
+
+    assert np.array_equal(first, second)
+    assert set(first).issubset(config.sounds)
+    assert np.issubdtype(first.dtype, np.integer)
+
+
 def test_samplers_support_empty_output_requests():
     assert ScipyEventCountSampler().sample_event_counts(
         0, 3, EventCountSamplingConfig(2.5), random_seed=42
@@ -71,6 +88,9 @@ def test_samplers_support_empty_output_requests():
     ).shape == (0,)
     assert ScipyEventPitchSampler().sample_event_pitches(
         0, EventPitchSamplingConfig(60, 10, 0, 127), random_seed=42
+    ).shape == (0,)
+    assert ScipyDrumSoundSampler().sample_drum_sounds(
+        0, DrumSoundSamplingConfig((36,), (1.0,)), random_seed=42
     ).shape == (0,)
 
 
@@ -90,3 +110,4 @@ def test_sampler_suite_identifies_distributions_and_backend():
     assert suite.metadata.event_count["distribution"] == "poisson"
     assert suite.metadata.event_time["distribution"] == "uniform"
     assert suite.metadata.event_pitch["distribution"] == "normal"
+    assert suite.metadata.drum_sound["distribution"] == "categorical"

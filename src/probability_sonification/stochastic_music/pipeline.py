@@ -14,6 +14,7 @@ from probability_sonification.stochastic_music.models import (
 )
 from probability_sonification.stochastic_music.midi import build_midi, midi_to_bytes
 from probability_sonification.stochastic_music.samplers import (
+    DrumSoundSampler,
     EventCountSampler,
     EventPitchSampler,
     EventTimeSampler,
@@ -24,6 +25,7 @@ from probability_sonification.stochastic_music.samplers import (
 _EVENT_COUNT_TASK = 0
 _EVENT_TIME_TASK = 1
 _EVENT_PITCH_TASK = 2
+_DRUM_SOUND_TASK = 3
 
 
 def _derive_seed(
@@ -57,7 +59,10 @@ def populate_event_matrix(
     )
 
     # EventMatrix provides the common validation boundary for every backend.
-    return EventMatrix(counts=counts, instruments=config.selected_instruments)
+    return EventMatrix(
+        counts=counts,
+        instruments=tuple(instrument.name for instrument in config.selected_instruments),
+    )
 
 
 def expand_event_matrix(event_matrix: EventMatrix) -> tuple[EventSlot, ...]:
@@ -127,21 +132,29 @@ def assign_event_times(
     return tuple(timed_events)
 
 
-def assign_event_pitches(
+def assign_event_notes(
     timed_events: tuple[TimedEvent, ...],
     config: StochasticMusicConfig,
-    sampler: EventPitchSampler,
+    pitch_sampler: EventPitchSampler,
+    drum_sound_sampler: DrumSoundSampler,
 ) -> tuple[MusicalEvent, ...]:
-    """Sample pitches and create complete musical events."""
+    """Assign Normal pitches or categorical drum sounds to musical events."""
 
+    pitched_indexes = []
+    drum_indexes = []
+    for index, timed_event in enumerate(timed_events):
+        instrument = config.selected_instruments[timed_event.slot.instrument_index]
+        (drum_indexes if instrument.is_drum else pitched_indexes).append(index)
+
+    note_numbers = np.empty(len(timed_events), dtype=int)
     sampled_pitches = np.asarray(
-        sampler.sample_event_pitches(
-            n_events=len(timed_events),
+        pitch_sampler.sample_event_pitches(
+            n_events=len(pitched_indexes),
             config=config.event_pitch_sampling,
             random_seed=_derive_seed(config.random_seed, _EVENT_PITCH_TASK),
         )
     )
-    if sampled_pitches.shape != (len(timed_events),):
+    if sampled_pitches.shape != (len(pitched_indexes),):
         raise ValueError("Event pitch sampler returned an unexpected shape.")
     if not np.issubdtype(sampled_pitches.dtype, np.integer):
         raise ValueError("Event pitch sampler must return integer MIDI pitches.")
@@ -149,10 +162,27 @@ def assign_event_pitches(
         sampled_pitches > config.event_pitch_sampling.maximum_pitch
     ):
         raise ValueError("Event pitch sampler returned values outside the pitch limits.")
+    note_numbers[pitched_indexes] = sampled_pitches
+
+    sampled_drum_sounds = np.asarray(
+        drum_sound_sampler.sample_drum_sounds(
+            n_events=len(drum_indexes),
+            config=config.drum_sound_sampling,
+            random_seed=_derive_seed(config.random_seed, _DRUM_SOUND_TASK),
+        )
+    )
+    if sampled_drum_sounds.shape != (len(drum_indexes),):
+        raise ValueError("Drum sound sampler returned an unexpected shape.")
+    if not np.issubdtype(sampled_drum_sounds.dtype, np.integer):
+        raise ValueError("Drum sound sampler must return integer MIDI note numbers.")
+    if not np.all(np.isin(sampled_drum_sounds, config.drum_sound_sampling.sounds)):
+        raise ValueError("Drum sound sampler returned an unconfigured drum sound.")
+    note_numbers[drum_indexes] = sampled_drum_sounds
 
     events = []
-    for timed_event, pitch in zip(timed_events, sampled_pitches, strict=True):
+    for timed_event, note_number in zip(timed_events, note_numbers, strict=True):
         slot = timed_event.slot
+        instrument = config.selected_instruments[slot.instrument_index]
         events.append(
             MusicalEvent(
                 instrument_index=slot.instrument_index,
@@ -161,8 +191,10 @@ def assign_event_pitches(
                 event_index_within_block=slot.event_index_within_block,
                 start_time=timed_event.start_time,
                 duration=config.note_duration,
-                pitch=int(pitch),
+                # PrettyMIDI calls this value pitch even for categorical drum sounds.
+                pitch=int(note_number),
                 velocity=config.note_velocity,
+                is_drum=instrument.is_drum,
             )
         )
     return tuple(events)
@@ -186,10 +218,11 @@ def generate_stochastic_music(
         config,
         sampler_suite.event_time_sampler,
     )
-    events = assign_event_pitches(
+    events = assign_event_notes(
         timed_events,
         config,
         sampler_suite.event_pitch_sampler,
+        sampler_suite.drum_sound_sampler,
     )
 
     # Keep the MIDI object for visualization and bytes for direct download.

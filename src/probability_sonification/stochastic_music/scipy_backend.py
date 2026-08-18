@@ -4,6 +4,7 @@ import numpy as np
 from scipy import stats
 
 from probability_sonification.stochastic_music.models import (
+    DrumSoundSamplingConfig,
     EventCountSamplingConfig,
     EventPitchSamplingConfig,
     EventTimeSamplingConfig,
@@ -94,6 +95,29 @@ class ScipyEventPitchSampler:
         ).astype(int)
 
 
+class ScipyDrumSoundSampler:
+    """Select General MIDI drum sounds from a categorical distribution."""
+
+    def sample_drum_sounds(
+        self,
+        n_events: int,
+        config: DrumSoundSamplingConfig,
+        random_seed: int | None,
+    ) -> np.ndarray:
+        _validate_sample_count(n_events, "Number of drum events")
+        if n_events == 0:
+            return np.empty(0, dtype=int)
+
+        # rv_discrete maps categorical probabilities to the configured MIDI sounds.
+        distribution = stats.rv_discrete(
+            values=(np.asarray(config.sounds), np.asarray(config.probabilities)),
+        )
+        return np.asarray(
+            distribution.rvs(size=n_events, random_state=random_seed),
+            dtype=int,
+        )
+
+
 def create_scipy_sampler_suite() -> SamplerSuite:
     """Create the task samplers and provenance for the SciPy backend."""
 
@@ -105,10 +129,12 @@ def create_scipy_sampler_suite() -> SamplerSuite:
         event_count_sampler=ScipyEventCountSampler(),
         event_time_sampler=ScipyEventTimeSampler(),
         event_pitch_sampler=ScipyEventPitchSampler(),
+        drum_sound_sampler=ScipyDrumSoundSampler(),
         metadata=SamplerMetadata(
             backend=backend,
             event_count={"distribution": "poisson"},
             event_time={"distribution": "uniform"},
             event_pitch={"distribution": "normal"},
+            drum_sound={"distribution": "categorical"},
         ),
     )

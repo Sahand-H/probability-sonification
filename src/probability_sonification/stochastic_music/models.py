@@ -15,6 +15,22 @@ class SamplingBackend(str, Enum):
 
 
 @dataclass(frozen=True)
+class InstrumentDefinition:
+    """General MIDI information needed to create an instrument track."""
+
+    name: str
+    family: str
+    program: int
+    is_drum: bool = False
+
+    def __post_init__(self) -> None:
+        if not self.name.strip() or not self.family.strip():
+            raise ValueError("Instrument name and family must not be empty.")
+        if not 0 <= self.program <= 127:
+            raise ValueError("Instrument program must be between 0 and 127.")
+
+
+@dataclass(frozen=True)
 class EventCountSamplingConfig:
     # Expected musical events per instrument in each time block.
     rate: float
@@ -48,10 +64,32 @@ class EventPitchSamplingConfig:
 
 
 @dataclass(frozen=True)
+class DrumSoundSamplingConfig:
+    """Categorical choices and probabilities for General MIDI drum sounds."""
+
+    sounds: tuple[int, ...]
+    probabilities: tuple[float, ...]
+
+    def __post_init__(self) -> None:
+        if not self.sounds:
+            raise ValueError("At least one drum sound must be configured.")
+        if len(self.sounds) != len(self.probabilities):
+            raise ValueError("Drum sounds and probabilities must have equal lengths.")
+        if len(set(self.sounds)) != len(self.sounds):
+            raise ValueError("Drum sounds must be unique.")
+        if any(not 0 <= sound <= 127 for sound in self.sounds):
+            raise ValueError("Drum sounds must be valid MIDI note numbers.")
+        if any(not np.isfinite(value) or value < 0 for value in self.probabilities):
+            raise ValueError("Drum sound probabilities must be finite and non-negative.")
+        if not np.isclose(sum(self.probabilities), 1.0):
+            raise ValueError("Drum sound probabilities must sum to one.")
+
+
+@dataclass(frozen=True)
 class StochasticMusicConfig:
     """Musical structure and sampling choices for one generation run."""
 
-    selected_instruments: tuple[str, ...]
+    selected_instruments: tuple[InstrumentDefinition, ...]
     composition_duration: float
     n_time_blocks: int
     note_duration: float
@@ -61,14 +99,14 @@ class StochasticMusicConfig:
     event_count_sampling: EventCountSamplingConfig
     event_time_sampling: EventTimeSamplingConfig
     event_pitch_sampling: EventPitchSamplingConfig
+    drum_sound_sampling: DrumSoundSamplingConfig
 
     def __post_init__(self) -> None:
         if not self.selected_instruments:
             raise ValueError("At least one instrument must be selected.")
-        if len(set(self.selected_instruments)) != len(self.selected_instruments):
+        instrument_names = [instrument.name for instrument in self.selected_instruments]
+        if len(set(instrument_names)) != len(instrument_names):
             raise ValueError("Selected instruments must be unique.")
-        if any(not instrument.strip() for instrument in self.selected_instruments):
-            raise ValueError("Instrument names must not be empty.")
         if not np.isfinite(self.composition_duration) or self.composition_duration <= 0:
             raise ValueError("Composition duration must be positive and finite.")
         if self.n_time_blocks < 1:
@@ -149,6 +187,7 @@ class MusicalEvent:
     duration: float
     pitch: int
     velocity: int
+    is_drum: bool = False
 
     @property
     def end_time(self) -> float:
@@ -163,6 +202,7 @@ class SamplerMetadata:
     event_count: Mapping[str, object]
     event_time: Mapping[str, object]
     event_pitch: Mapping[str, object]
+    drum_sound: Mapping[str, object]
 
 
 @dataclass(frozen=True)

@@ -1,11 +1,14 @@
 from probability_sonification.stochastic_music import (
+    DrumSoundSamplingConfig,
     EventCountSamplingConfig,
     EventMatrix,
     EventPitchSamplingConfig,
     EventTimeSamplingConfig,
+    InstrumentDefinition,
     MusicalEvent,
     SamplingBackend,
     StochasticMusicConfig,
+    drum_sound_distribution_plot,
     event_matrix_plot,
     event_pitch_distribution_plot,
     event_timeline_plot,
@@ -23,7 +26,10 @@ EVENTS = (
 
 def make_config() -> StochasticMusicConfig:
     return StochasticMusicConfig(
-        selected_instruments=INSTRUMENTS,
+        selected_instruments=(
+            InstrumentDefinition(INSTRUMENTS[0], "Piano", 0),
+            InstrumentDefinition(INSTRUMENTS[1], "Solo strings", 40),
+        ),
         composition_duration=10,
         n_time_blocks=2,
         note_duration=2,
@@ -33,6 +39,7 @@ def make_config() -> StochasticMusicConfig:
         event_count_sampling=EventCountSamplingConfig(2.5),
         event_time_sampling=EventTimeSamplingConfig(),
         event_pitch_sampling=EventPitchSamplingConfig(60, 10, 0, 127),
+        drum_sound_sampling=DrumSoundSamplingConfig((36, 38), (0.5, 0.5)),
     )
 
 
@@ -67,6 +74,17 @@ def test_note_map_plot_contains_note_spans():
     assert spec["title"] == "Note map"
     assert spec["data"]["values"][0]["Start time"] == 1.0
     assert spec["data"]["values"][0]["End time"] == 3.0
+
+
+def test_drum_sound_distribution_uses_general_midi_drum_names():
+    drum_event = MusicalEvent(
+        0, "Drum Kit", 0, 0, 1.0, 1.0, 38, 90, is_drum=True
+    )
+
+    spec = drum_sound_distribution_plot((drum_event,), ("Drum Kit",)).to_dict()
+
+    assert spec["title"] == "Drum sound distribution"
+    assert spec["data"]["values"][0]["Drum sound"] == "Acoustic Snare"
 
 
 def test_event_plots_accept_empty_event_results():

@@ -1,11 +1,13 @@
 """Core types and sampling interfaces for stochastic music generation."""
 
 from probability_sonification.stochastic_music.models import (
+    DrumSoundSamplingConfig,
     EventCountSamplingConfig,
     EventMatrix,
     EventPitchSamplingConfig,
     EventSlot,
     EventTimeSamplingConfig,
+    InstrumentDefinition,
     MusicalEvent,
     SamplerMetadata,
     SamplingBackend,
@@ -14,7 +16,7 @@ from probability_sonification.stochastic_music.models import (
     TimedEvent,
 )
 from probability_sonification.stochastic_music.pipeline import (
-    assign_event_pitches,
+    assign_event_notes,
     assign_event_times,
     expand_event_matrix,
     generate_stochastic_music,
@@ -22,6 +24,7 @@ from probability_sonification.stochastic_music.pipeline import (
 )
 from probability_sonification.stochastic_music.midi import build_midi, midi_to_bytes
 from probability_sonification.stochastic_music.plots import (
+    drum_sound_distribution_plot,
     event_matrix_plot,
     event_pitch_distribution_plot,
     event_timeline_plot,
@@ -31,12 +34,14 @@ from probability_sonification.stochastic_music.page import (
     render_stochastic_music_experiment,
 )
 from probability_sonification.stochastic_music.samplers import (
+    DrumSoundSampler,
     EventCountSampler,
     EventPitchSampler,
     EventTimeSampler,
     SamplerSuite,
 )
 from probability_sonification.stochastic_music.scipy_backend import (
+    ScipyDrumSoundSampler,
     ScipyEventCountSampler,
     ScipyEventPitchSampler,
     ScipyEventTimeSampler,
@@ -44,6 +49,8 @@ from probability_sonification.stochastic_music.scipy_backend import (
 )
 
 __all__ = [
+    "DrumSoundSampler",
+    "DrumSoundSamplingConfig",
     "EventCountSampler",
     "EventCountSamplingConfig",
     "EventMatrix",
@@ -52,20 +59,23 @@ __all__ = [
     "EventSlot",
     "EventTimeSampler",
     "EventTimeSamplingConfig",
+    "InstrumentDefinition",
     "MusicalEvent",
     "SamplerMetadata",
     "SamplerSuite",
     "SamplingBackend",
+    "ScipyDrumSoundSampler",
     "ScipyEventCountSampler",
     "ScipyEventPitchSampler",
     "ScipyEventTimeSampler",
     "StochasticMusicConfig",
     "StochasticMusicResult",
     "TimedEvent",
-    "assign_event_pitches",
+    "assign_event_notes",
     "assign_event_times",
     "build_midi",
     "create_scipy_sampler_suite",
+    "drum_sound_distribution_plot",
     "event_matrix_plot",
     "event_pitch_distribution_plot",
     "event_timeline_plot",

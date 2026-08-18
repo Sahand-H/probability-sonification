@@ -57,16 +57,24 @@ def event_timeline_plot(
 ):
     """Plot event start times and the boundaries between time blocks."""
 
+    instrument_names = tuple(
+        instrument.name for instrument in config.selected_instruments
+    )
     event_values = [
         {
             "Instrument": event.instrument_name,
             "Start time": event.start_time,
             "Time block": event.time_block_index + 1,
-            "Pitch": event.pitch,
+            "MIDI note": event.pitch,
+            "Note or sound": (
+                pretty_midi.note_number_to_drum_name(event.pitch)
+                if event.is_drum
+                else pretty_midi.note_number_to_name(event.pitch)
+            ),
         }
         for event in events
     ]
-    color_scale = _instrument_color_scale(config.selected_instruments)
+    color_scale = _instrument_color_scale(instrument_names)
 
     # Tick marks emphasize event onset without implying a sampled duration.
     event_marks = (
@@ -81,7 +89,7 @@ def event_timeline_plot(
             y=alt.Y(
                 "Instrument:N",
                 title="Instrument",
-                sort=list(config.selected_instruments),
+                sort=list(instrument_names),
             ),
             color=alt.Color(
                 "Instrument:N",
@@ -92,7 +100,8 @@ def event_timeline_plot(
                 "Instrument:N",
                 alt.Tooltip("Start time:Q", format=".2f"),
                 "Time block:O",
-                "Pitch:Q",
+                "Note or sound:N",
+                "MIDI note:Q",
             ],
         )
     )
@@ -112,7 +121,7 @@ def event_timeline_plot(
         alt.layer(boundary_rules, event_marks)
         .properties(
             title="Event timeline",
-            height=max(140, 50 * len(config.selected_instruments)),
+            height=max(140, 50 * len(instrument_names)),
         )
         .configure_view(strokeOpacity=0)
     )
@@ -127,6 +136,7 @@ def event_pitch_distribution_plot(
     pitch_values = [
         {"Instrument": event.instrument_name, "Pitch": event.pitch}
         for event in events
+        if not event.is_drum
     ]
 
     # Normalize each instrument separately so different event counts remain comparable.
@@ -167,6 +177,39 @@ def event_pitch_distribution_plot(
     )
 
 
+def drum_sound_distribution_plot(
+    events: tuple[MusicalEvent, ...],
+    instruments: tuple[str, ...],
+):
+    """Plot the categorical drum sounds selected for drum events."""
+
+    drum_values = [
+        {
+            "Instrument": event.instrument_name,
+            "Drum sound": pretty_midi.note_number_to_drum_name(event.pitch),
+        }
+        for event in events
+        if event.is_drum
+    ]
+
+    return (
+        alt.Chart(alt.Data(values=drum_values))
+        .mark_bar()
+        .encode(
+            x=alt.X("Drum sound:N", title="Drum sound"),
+            y=alt.Y("count():Q", title="Events"),
+            color=alt.Color(
+                "Instrument:N",
+                scale=_instrument_color_scale(instruments),
+                legend=None,
+            ),
+            tooltip=["Instrument:N", "Drum sound:N", alt.Tooltip("count():Q")],
+        )
+        .properties(title="Drum sound distribution", height=200)
+        .configure_view(strokeOpacity=0)
+    )
+
+
 def note_map_plot(
     events: tuple[MusicalEvent, ...],
     instruments: tuple[str, ...],
@@ -179,7 +222,11 @@ def note_map_plot(
             "Start time": event.start_time,
             "End time": event.end_time,
             "Pitch": event.pitch,
-            "Note": pretty_midi.note_number_to_name(event.pitch),
+            "Note or sound": (
+                pretty_midi.note_number_to_drum_name(event.pitch)
+                if event.is_drum
+                else pretty_midi.note_number_to_name(event.pitch)
+            ),
             "Velocity": event.velocity,
         }
         for event in events
@@ -191,7 +238,7 @@ def note_map_plot(
         .encode(
             x=alt.X("Start time:Q", title="Time (seconds)"),
             x2="End time:Q",
-            y=alt.Y("Pitch:Q", title="MIDI pitch"),
+            y=alt.Y("Pitch:Q", title="MIDI note number"),
             color=alt.Color(
                 "Instrument:N",
                 scale=_instrument_color_scale(instruments),
@@ -199,7 +246,7 @@ def note_map_plot(
             ),
             tooltip=[
                 "Instrument:N",
-                "Note:N",
+                "Note or sound:N",
                 "Pitch:Q",
                 alt.Tooltip("Start time:Q", format=".2f"),
                 alt.Tooltip("End time:Q", format=".2f"),

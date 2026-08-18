@@ -1,12 +1,15 @@
 """Streamlit presentation for the stochastic music experiment."""
 
+import pretty_midi
 import streamlit as st
 
 from probability_sonification.sonification import render_audio
 from probability_sonification.stochastic_music.models import (
+    DrumSoundSamplingConfig,
     EventCountSamplingConfig,
     EventPitchSamplingConfig,
     EventTimeSamplingConfig,
+    InstrumentDefinition,
     SamplingBackend,
     StochasticMusicConfig,
 )
@@ -14,6 +17,7 @@ from probability_sonification.stochastic_music.pipeline import (
     generate_stochastic_music,
 )
 from probability_sonification.stochastic_music.plots import (
+    drum_sound_distribution_plot,
     event_matrix_plot,
     event_pitch_distribution_plot,
     event_timeline_plot,
@@ -24,23 +28,71 @@ from probability_sonification.stochastic_music.scipy_backend import (
 )
 
 
+def _pitched_instrument(name: str, family: str) -> InstrumentDefinition:
+    """Create metadata for a standard General MIDI program instrument."""
+
+    return InstrumentDefinition(
+        name=name,
+        family=family,
+        program=pretty_midi.instrument_name_to_program(name),
+    )
+
+
 INSTRUMENT_GROUPS = (
-    ("Piano", ("Acoustic Grand Piano", "Electric Piano 1")),
-    ("Chromatic percussion", ("Xylophone",)),
-    ("Organ", ("Harmonica",)),
+    (
+        "Piano",
+        (
+            _pitched_instrument("Acoustic Grand Piano", "Piano"),
+            _pitched_instrument("Electric Piano 1", "Piano"),
+        ),
+    ),
+    (
+        "Chromatic percussion",
+        (_pitched_instrument("Xylophone", "Chromatic percussion"),),
+    ),
+    ("Organ", (_pitched_instrument("Harmonica", "Organ"),)),
     (
         "Guitar",
         (
-            "Acoustic Guitar (steel)",
-            "Electric Guitar (clean)",
+            _pitched_instrument("Acoustic Guitar (steel)", "Guitar"),
+            _pitched_instrument("Electric Guitar (clean)", "Guitar"),
         ),
     ),
-    ("Bass", ("Electric Bass (pick)",)),
-    ("Solo strings", ("Violin", "Cello")),
-    ("Brass", ("Trumpet", "Trombone", "French Horn")),
-    ("Reed", ("Alto Sax", "Clarinet")),
-    ("Pipe", ("Flute", "Recorder")),
-    ("Percussive", ("Synth Drum",)),
+    ("Bass", (_pitched_instrument("Electric Bass (pick)", "Bass"),)),
+    (
+        "Solo strings",
+        (
+            _pitched_instrument("Violin", "Solo strings"),
+            _pitched_instrument("Cello", "Solo strings"),
+        ),
+    ),
+    (
+        "Brass",
+        (
+            _pitched_instrument("Trumpet", "Brass"),
+            _pitched_instrument("Trombone", "Brass"),
+            _pitched_instrument("French Horn", "Brass"),
+        ),
+    ),
+    (
+        "Reed",
+        (
+            _pitched_instrument("Alto Sax", "Reed"),
+            _pitched_instrument("Clarinet", "Reed"),
+        ),
+    ),
+    (
+        "Pipe",
+        (
+            _pitched_instrument("Flute", "Pipe"),
+            _pitched_instrument("Recorder", "Pipe"),
+        ),
+    ),
+    ("Percussive", (_pitched_instrument("Synth Drum", "Percussive"),)),
+    (
+        "Percussion and drums",
+        (InstrumentDefinition("Drum Kit", "Percussion and drums", 0, is_drum=True),),
+    ),
 )
 AVAILABLE_INSTRUMENTS = tuple(
     instrument
@@ -53,6 +105,8 @@ DEFAULT_INSTRUMENTS = {
     "Cello",
     "Flute",
 }
+DEFAULT_DRUM_SOUNDS = (36, 38, 42, 46, 49)
+DEFAULT_DRUM_PROBABILITIES = (0.2, 0.2, 0.2, 0.2, 0.2)
 
 
 def _backend_label(backend: SamplingBackend) -> str:
@@ -78,6 +132,10 @@ def render_stochastic_music_experiment() -> None:
 
     with st.expander("Instruments", expanded=True):
         st.caption("Select at least one instrument. Their order is preserved in the plots and MIDI tracks.")
+        st.info(
+            "Percussion and drum support is a work in progress. "
+            "Drum sounds and controls may change."
+        )
         instrument_columns = st.columns(2)
         selected_instruments = []
         for group_index, (group_name, instruments) in enumerate(INSTRUMENT_GROUPS):
@@ -86,9 +144,9 @@ def render_stochastic_music_experiment() -> None:
                 st.markdown(f"**{group_name}**")
                 for instrument in instruments:
                     if st.checkbox(
-                        instrument,
-                        value=instrument in DEFAULT_INSTRUMENTS,
-                        key=f"stochastic-instrument-{instrument}",
+                        instrument.name,
+                        value=instrument.name in DEFAULT_INSTRUMENTS,
+                        key=f"stochastic-instrument-{instrument.name}",
                     ):
                         selected_instruments.append(instrument)
         selected_instruments = tuple(selected_instruments)
@@ -170,6 +228,12 @@ def render_stochastic_music_experiment() -> None:
             value=(0, 127),
         )
 
+        st.markdown("**Drum sounds**")
+        st.caption(
+            "Drum Kit events select Bass Drum, Snare, Closed Hi-Hat, "
+            "Open Hi-Hat, or Crash Cymbal with equal categorical probabilities."
+        )
+
     with st.expander("Reproducibility", expanded=False):
         use_reproducible_seed = st.toggle(
             "Use reproducible seed",
@@ -212,6 +276,10 @@ def render_stochastic_music_experiment() -> None:
                     minimum_pitch=int(minimum_pitch),
                     maximum_pitch=int(maximum_pitch),
                 ),
+                drum_sound_sampling=DrumSoundSamplingConfig(
+                    sounds=DEFAULT_DRUM_SOUNDS,
+                    probabilities=DEFAULT_DRUM_PROBABILITIES,
+                ),
             )
             with st.spinner("Generating stochastic music..."):
                 result = generate_stochastic_music(config, _sampler_suite(sampling_backend))
@@ -237,15 +305,35 @@ def render_stochastic_music_experiment() -> None:
         event_timeline_plot(result.events, result.config),
         width="stretch",
     )
+    if any(not event.is_drum for event in result.events):
+        st.altair_chart(
+            event_pitch_distribution_plot(
+                result.events,
+                tuple(
+                    instrument.name
+                    for instrument in result.config.selected_instruments
+                    if not instrument.is_drum
+                ),
+            ),
+            width="stretch",
+        )
+    if any(event.is_drum for event in result.events):
+        st.altair_chart(
+            drum_sound_distribution_plot(
+                result.events,
+                tuple(
+                    instrument.name
+                    for instrument in result.config.selected_instruments
+                    if instrument.is_drum
+                ),
+            ),
+            width="stretch",
+        )
     st.altair_chart(
-        event_pitch_distribution_plot(
+        note_map_plot(
             result.events,
-            result.config.selected_instruments,
+            tuple(instrument.name for instrument in result.config.selected_instruments),
         ),
-        width="stretch",
-    )
-    st.altair_chart(
-        note_map_plot(result.events, result.config.selected_instruments),
         width="stretch",
     )
 
@@ -267,5 +355,6 @@ def render_stochastic_music_experiment() -> None:
     with st.expander("Sampling summary"):
         st.write(f"Backend: {_backend_label(result.sampler_metadata.backend)}")
         st.write(
-            "Event counts: Poisson · Event times: Uniform · Event pitches: Normal"
+            "Event counts: Poisson · Event times: Uniform · Event pitches: Normal · "
+            "Drum sounds: Categorical"
         )
