@@ -18,6 +18,12 @@ from probability_sonification.stochastic_music.samplers import (
     EventTimeSampler,
     SamplerSuite,
 )
+from probability_sonification.stochastic_music.scipy_backend import (
+    ScipyEventCountSampler,
+    ScipyEventPitchSampler,
+    ScipyEventTimeSampler,
+    create_scipy_sampler_suite,
+)
 
 __all__ = [
     "EventCountSampler",
@@ -32,6 +38,10 @@ __all__ = [
     "SamplerMetadata",
     "SamplerSuite",
     "SamplingBackend",
+    "ScipyEventCountSampler",
+    "ScipyEventPitchSampler",
+    "ScipyEventTimeSampler",
     "StochasticMusicConfig",
     "StochasticMusicResult",
+    "create_scipy_sampler_suite",
 ]

@@ -54,6 +54,7 @@ class EventPitchSampler(Protocol):
 class SamplerSuite:
     """All task-specific samplers supplied by one backend."""
 
+    # The backend is recorded here so the pipeline can check it against its config.
     backend: SamplingBackend
     event_count_sampler: EventCountSampler
     event_time_sampler: EventTimeSampler
