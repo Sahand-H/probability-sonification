@@ -67,6 +67,19 @@ INSTRUMENT_GROUPS = (
         ),
     ),
     (
+        "Ensemble",
+        (
+            _pitched_instrument("String Ensemble 1", "Ensemble"),
+            _pitched_instrument("String Ensemble 2", "Ensemble"),
+            _pitched_instrument("Synth Strings 1", "Ensemble"),
+            _pitched_instrument("Synth Strings 2", "Ensemble"),
+            _pitched_instrument("Choir Aahs", "Ensemble"),
+            _pitched_instrument("Voice Oohs", "Ensemble"),
+            _pitched_instrument("Synth Choir", "Ensemble"),
+            _pitched_instrument("Orchestra Hit", "Ensemble"),
+        ),
+    ),
+    (
         "Brass",
         (
             _pitched_instrument("Trumpet", "Brass"),
@@ -88,7 +101,15 @@ INSTRUMENT_GROUPS = (
             _pitched_instrument("Recorder", "Pipe"),
         ),
     ),
-    ("Percussive", (_pitched_instrument("Synth Drum", "Percussive"),)),
+    (
+        "Percussive",
+        (
+            _pitched_instrument("Woodblock", "Percussive"),
+            _pitched_instrument("Taiko Drum", "Percussive"),
+            _pitched_instrument("Melodic Tom", "Percussive"),
+            _pitched_instrument("Synth Drum", "Percussive"),
+        ),
+    ),
     (
         "Percussion and drums",
         (InstrumentDefinition("Drum Kit", "Percussion and drums", 0, is_drum=True),),
@@ -106,8 +127,18 @@ DEFAULT_INSTRUMENTS = {
     "Flute",
 }
 DEFAULT_DRUM_SOUNDS = (36, 38, 42, 44, 46, 45, 48, 49, 51)
-DEFAULT_DRUM_PROBABILITIES = tuple(
-    1 / len(DEFAULT_DRUM_SOUNDS) for _ in DEFAULT_DRUM_SOUNDS
+# Heuristic pop/rock-style defaults, not corpus-derived measurements. Hi-hat,
+# kick, and snare form the repeating groove; toms and cymbals are rarer accents.
+DEFAULT_DRUM_PROBABILITIES = (
+    0.22,  # Bass Drum 1
+    0.20,  # Acoustic Snare
+    0.28,  # Closed Hi-Hat
+    0.06,  # Pedal Hi-Hat
+    0.08,  # Open Hi-Hat
+    0.04,  # Low Tom
+    0.04,  # Hi-Mid Tom
+    0.04,  # Crash Cymbal 1
+    0.04,  # Ride Cymbal 1
 )
 
 
@@ -233,7 +264,14 @@ def render_stochastic_music_experiment() -> None:
         st.markdown("**Drum sounds**")
         st.caption(
             "Drum Kit events select from nine common kick, snare, hi-hat, tom, "
-            "crash, and ride sounds with equal categorical probabilities."
+            "crash, and ride sounds. Weighted categorical probabilities favor "
+            "kick, snare, and closed hi-hat."
+        )
+        st.caption(
+            "Defaults — Closed Hi-Hat 28%, Bass Drum 22%, Acoustic Snare 20%, "
+            "Open Hi-Hat 8%, Pedal Hi-Hat 6%, and 4% each for Low Tom, "
+            "Hi-Mid Tom, Crash Cymbal, and Ride Cymbal. These are heuristic "
+            "pop/rock-style weights, not measurements from a drum corpus."
         )
 
     with st.expander("Reproducibility", expanded=False):

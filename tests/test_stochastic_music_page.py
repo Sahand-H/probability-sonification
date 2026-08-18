@@ -3,6 +3,7 @@ from streamlit.testing.v1 import AppTest
 
 from probability_sonification.stochastic_music.page import (
     AVAILABLE_INSTRUMENTS,
+    DEFAULT_DRUM_PROBABILITIES,
     DEFAULT_DRUM_SOUNDS,
     INSTRUMENT_GROUPS,
 )
@@ -26,6 +27,10 @@ def test_stochastic_music_page_initial_controls():
     assert app.toggle[0].value is False
     assert "Random seed" not in [widget.label for widget in app.number_input]
     assert app.button[0].label == "Generate preview"
+    assert any(
+        "not measurements from a drum corpus" in caption.value
+        for caption in app.caption
+    )
 
     checkbox_labels = [checkbox.label for checkbox in app.checkbox]
     assert "Alto Sax" in checkbox_labels
@@ -40,6 +45,17 @@ def test_stochastic_music_page_initial_controls():
     assert "Trumpet" in checkbox_labels
     assert "Trombone" in checkbox_labels
     assert "Drum Kit" in checkbox_labels
+    assert "String Ensemble 1" in checkbox_labels
+    assert "String Ensemble 2" in checkbox_labels
+    assert "Synth Strings 1" in checkbox_labels
+    assert "Synth Strings 2" in checkbox_labels
+    assert "Choir Aahs" in checkbox_labels
+    assert "Voice Oohs" in checkbox_labels
+    assert "Synth Choir" in checkbox_labels
+    assert "Orchestra Hit" in checkbox_labels
+    assert "Taiko Drum" in checkbox_labels
+    assert "Woodblock" in checkbox_labels
+    assert "Melodic Tom" in checkbox_labels
     assert [group_name for group_name, _ in INSTRUMENT_GROUPS] == [
         "Piano",
         "Chromatic percussion",
@@ -47,6 +63,7 @@ def test_stochastic_music_page_initial_controls():
         "Guitar",
         "Bass",
         "Solo strings",
+        "Ensemble",
         "Brass",
         "Reed",
         "Pipe",
@@ -85,3 +102,17 @@ def test_default_drum_palette_contains_common_kit_sounds():
         "Crash Cymbal 1",
         "Ride Cymbal 1",
     } == drum_names
+    probability_by_name = dict(
+        zip(
+            (
+                pretty_midi.note_number_to_drum_name(note_number)
+                for note_number in DEFAULT_DRUM_SOUNDS
+            ),
+            DEFAULT_DRUM_PROBABILITIES,
+            strict=True,
+        )
+    )
+    assert abs(sum(DEFAULT_DRUM_PROBABILITIES) - 1.0) < 1e-12
+    assert probability_by_name["Closed Hi Hat"] > probability_by_name["Crash Cymbal 1"]
+    assert probability_by_name["Bass Drum 1"] > probability_by_name["Low Tom"]
+    assert probability_by_name["Acoustic Snare"] > probability_by_name["Ride Cymbal 1"]
