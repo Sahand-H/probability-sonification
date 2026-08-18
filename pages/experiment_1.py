@@ -214,7 +214,7 @@ with left:
     left_settings = controls("A", "Uniform", "Acoustic Grand Piano")
 with right:
     st.subheader("Distribution B")
-    right_settings = controls("B", "Poisson", "Violin")
+    right_settings = controls("B", "Poisson", "Acoustic Grand Piano")
 
 with st.expander("Shared sampling", expanded=True):
     st.caption("Both distributions use the same sample size and random seed.")

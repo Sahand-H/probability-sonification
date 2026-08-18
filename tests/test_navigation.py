@@ -12,6 +12,15 @@ def test_navigation_defaults_to_experiment_1():
     assert not app.exception
     assert app.title[0].value == "Basic sonification of probability distributions."
     assert app.button[0].label == "Generate comparison"
+    instrument_defaults = [
+        selectbox.value
+        for selectbox in app.selectbox
+        if selectbox.label == "Instrument"
+    ]
+    assert instrument_defaults == [
+        "Acoustic Grand Piano",
+        "Acoustic Grand Piano",
+    ]
 
 
 def test_experiment_2_is_a_coming_soon_placeholder():
