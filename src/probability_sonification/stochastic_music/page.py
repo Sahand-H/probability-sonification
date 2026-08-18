@@ -105,8 +105,10 @@ DEFAULT_INSTRUMENTS = {
     "Cello",
     "Flute",
 }
-DEFAULT_DRUM_SOUNDS = (36, 38, 42, 46, 49)
-DEFAULT_DRUM_PROBABILITIES = (0.2, 0.2, 0.2, 0.2, 0.2)
+DEFAULT_DRUM_SOUNDS = (36, 38, 42, 44, 46, 45, 48, 49, 51)
+DEFAULT_DRUM_PROBABILITIES = tuple(
+    1 / len(DEFAULT_DRUM_SOUNDS) for _ in DEFAULT_DRUM_SOUNDS
+)
 
 
 def _backend_label(backend: SamplingBackend) -> str:
@@ -230,8 +232,8 @@ def render_stochastic_music_experiment() -> None:
 
         st.markdown("**Drum sounds**")
         st.caption(
-            "Drum Kit events select Bass Drum, Snare, Closed Hi-Hat, "
-            "Open Hi-Hat, or Crash Cymbal with equal categorical probabilities."
+            "Drum Kit events select from nine common kick, snare, hi-hat, tom, "
+            "crash, and ride sounds with equal categorical probabilities."
         )
 
     with st.expander("Reproducibility", expanded=False):

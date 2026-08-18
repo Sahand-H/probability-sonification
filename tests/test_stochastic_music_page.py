@@ -3,6 +3,7 @@ from streamlit.testing.v1 import AppTest
 
 from probability_sonification.stochastic_music.page import (
     AVAILABLE_INSTRUMENTS,
+    DEFAULT_DRUM_SOUNDS,
     INSTRUMENT_GROUPS,
 )
 
@@ -65,3 +66,22 @@ def test_all_instrument_options_are_valid_general_midi_names():
             assert instrument.program == 0
         else:
             assert pretty_midi.instrument_name_to_program(instrument.name) == instrument.program
+
+
+def test_default_drum_palette_contains_common_kit_sounds():
+    drum_names = {
+        pretty_midi.note_number_to_drum_name(note_number)
+        for note_number in DEFAULT_DRUM_SOUNDS
+    }
+
+    assert {
+        "Bass Drum 1",
+        "Acoustic Snare",
+        "Closed Hi Hat",
+        "Pedal Hi Hat",
+        "Open Hi Hat",
+        "Low Tom",
+        "Hi-Mid Tom",
+        "Crash Cymbal 1",
+        "Ride Cymbal 1",
+    } == drum_names
